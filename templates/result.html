@@ -2,11 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>OCR Result</title>
+    <title>OCR Processing Complete</title>
 </head>
 <body>
-    <h1>Extracted Text</h1>
-    <pre>{{ text }}</pre>
+    <h1>Processing Complete</h1>
+    <p>The extracted text has been successfully saved as:</p>
+    <p><b>{{ csv_filename }}</b></p>
+    <p>in the S3 bucket: <b>{{ bucket_name }}</b>.</p>
+    <br>
     <a href="/">Upload another document</a>
 </body>
 </html>

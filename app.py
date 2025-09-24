@@ -1,16 +1,23 @@
 import os
 import boto3
-from flask import Flask, render_template, request, redirect, url_for
 import time
+import csv
+import io
+from flask import Flask, render_template, request, redirect, url_for
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 app = Flask(__name__)
 
-# AWS Configuration
+# AWS Configuration - loaded from environment variables
 AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
 AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
 AWS_REGION = os.environ.get('AWS_REGION')
 S3_BUCKET = os.environ.get('S3_BUCKET')
 
+# Initialize AWS clients
 s3 = boto3.client(
     's3',
     aws_access_key_id=AWS_ACCESS_KEY_ID,
@@ -57,10 +64,11 @@ def upload():
         )
 
         job_id = response['JobId']
-        return redirect(url_for('result', job_id=job_id))
+        # Pass the original filename to the result route
+        return redirect(url_for('result', job_id=job_id, original_filename=file.filename))
 
-@app.route('/result/<job_id>')
-def result(job_id):
+@app.route('/result/<job_id>/<original_filename>')
+def result(job_id, original_filename):
     response = textract.get_document_text_detection(JobId=job_id)
 
     while response['JobStatus'] == 'IN_PROGRESS':
@@ -68,22 +76,46 @@ def result(job_id):
         response = textract.get_document_text_detection(JobId=job_id)
 
     if response['JobStatus'] == 'SUCCEEDED':
+        # Collect all blocks from all pages
         blocks = []
         pages = [response]
-
         while 'NextToken' in pages[-1]:
             pages.append(textract.get_document_text_detection(JobId=job_id, NextToken=pages[-1]['NextToken']))
-
         for page in pages:
             blocks.extend(page['Blocks'])
 
-        extracted_text = ''
+        # --- CSV Generation Logic ---
+        # Create a file-like object in memory
+        csv_buffer = io.StringIO()
+        writer = csv.writer(csv_buffer)
+
+        # Write header
+        writer.writerow(['DetectedText'])
+
+        # Filter for LINE blocks and write the text to the CSV
         for block in blocks:
             if block['BlockType'] == 'LINE':
-                extracted_text += block['Text'] + '\n'
-        return render_template('result.html', text=extracted_text)
+                writer.writerow([block['Text']])
+        
+        # --- S3 Upload Logic ---
+        # Determine the output CSV filename
+        base_filename = os.path.splitext(original_filename)[0]
+        csv_filename = f"{base_filename}_result.csv"
 
-    return "Error processing document."
+        # Rewind the buffer to the beginning
+        csv_buffer.seek(0)
+        
+        # Upload the in-memory CSV file to S3
+        s3.upload_fileobj(
+            csv_buffer,
+            S3_BUCKET,
+            csv_filename,
+            ExtraArgs={'ContentType': 'text/csv'}
+        )
+        
+        return render_template('result.html', csv_filename=csv_filename, bucket_name=S3_BUCKET)
+
+    return "Error processing document. Please try again."
 
 if __name__ == '__main__':
     app.run()
