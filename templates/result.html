@@ -4,86 +4,100 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Processing Complete</title>
-    <!-- Font Awesome for the success icon -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <style>
-        /* Basic Reset and Upscale Background */
-        body {
-            margin: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            background-color: #f4f7f9;
-            color: #333;
-        }
-
-        /* The Main Tile Container */
-        .container {
-            background-color: white;
-            padding: 40px 50px;
-            border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
-            text-align: center;
-            max-width: 500px;
-            width: 90%;
-        }
-
-        h1 {
-            font-size: 1.8rem;
-            margin-bottom: 10px;
-            color: #2c3e50;
-        }
-
-        p {
-            font-size: 1rem;
-            color: #7f8c8d;
-            margin-bottom: 30px;
-            line-height: 1.6;
-        }
-        
-        b {
-            color: #34495e;
-            font-weight: 600;
-        }
-
-        /* Success Icon */
-        .fa-check-circle {
-            font-size: 3rem;
-            color: #2ecc71; /* A nice green for success */
-            margin-bottom: 20px;
-        }
-
-        /* "Upload Another" Link Styled as a Button */
-        .upload-another-btn {
-            display: inline-block;
-            background-color: #3498db;
-            color: white;
-            text-decoration: none;
-            padding: 15px 30px;
-            border-radius: 10px;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background-color 0.3s ease;
-        }
-        .upload-another-btn:hover {
-            background-color: #2980b9;
+        /* All CSS remains the same */
+        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 100vh; background-color: #f4f7f9; color: #333; padding: 20px 0; }
+        .container { background-color: white; padding: 40px 50px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08); text-align: center; max-width: 500px; width: 90%; margin-bottom: 30px; }
+        h1 { font-size: 1.8rem; margin-bottom: 10px; color: #2c3e50; }
+        p { font-size: 1rem; color: #7f8c8d; margin-bottom: 25px; line-height: 1.6; }
+        .fa-check-circle { font-size: 3rem; color: #2ecc71; margin-bottom: 20px; }
+        .download-btn { display: inline-block; background-color: #27ae60; color: white; text-decoration: none; padding: 15px 30px; border-radius: 10px; font-size: 1.1rem; font-weight: 600; cursor: pointer; transition: background-color 0.3s ease; margin-bottom: 15px; }
+        .download-btn:hover { background-color: #229954; }
+        .download-btn .fa-download { margin-right: 10px; }
+        .small-text { font-size: 0.8rem; color: #95a5a6; margin-top: 0; margin-bottom: 30px; }
+        .upload-another-btn { display: inline-block; background-color: #3498db; color: white; text-decoration: none; padding: 15px 30px; border-radius: 10px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: background-color 0.3s ease; }
+        .upload-another-btn:hover { background-color: #2980b9; }
+        #print-preview-container { display: none; }
+        .print-btn { background-color: #8e44ad; color: white; border: none; padding: 15px 20px; border-radius: 10px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: background-color 0.3s ease; }
+        .print-btn:hover { background-color: #732d91; }
+        .print-btn .fa-print { margin-right: 10px; }
+        #preview-content { background-color: #fdfdfe; border: 1px solid #ecf0f1; border-radius: 8px; padding: 20px; margin-top: 20px; text-align: left; max-height: 400px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; font-family: 'Courier New', Courier, monospace; font-size: 0.9rem; line-height: 1.5; color: #34495e; }
+        @media print {
+            body > *:not(#print-preview-container) { display: none !important; }
+            #print-preview-container, #preview-content { display: block !important; box-shadow: none !important; border: none !important; max-height: none !important; overflow: visible !important; width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 0 !important; }
         }
     </style>
 </head>
 <body>
 
+    <!-- Main Results Box -->
     <main class="container">
         <i class="fa-solid fa-check-circle"></i>
         <h1>Processing Complete</h1>
-        <p>
-            The extracted text has been successfully saved as <b>{{ csv_filename }}</b> 
-            in the S3 bucket: <b>{{ bucket_name }}</b>.
-        </p>
+        <p>Your document has been processed and the results are ready for download.</p>
+        
+        {% if download_url %}
+            <a href="{{ download_url }}" class="download-btn" download>
+                <i class="fa-solid fa-download"></i> Download {{ csv_filename }}
+            </a>
+            <p class="small-text">Note: This secure link will expire in 5 minutes.</p>
+        {% else %}
+            <p>Could not generate a download link. Please check the S3 bucket <b>{{ bucket_name }}</b> for the file <b>{{ csv_filename }}</b>.</p>
+        {% endif %}
+
         <a href="/" class="upload-another-btn">Upload Another Document</a>
     </main>
+
+    <!-- Print Preview Box -->
+    <section class="container" id="print-preview-container">
+        <button class="print-btn" id="print-button">
+            <i class="fa-solid fa-print"></i> Preview & Print Results
+        </button>
+        <div id="preview-content" aria-live="polite"></div>
+    </section>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const printButton = document.getElementById('print-button');
+            const previewContainer = document.getElementById('print-preview-container');
+            const previewContent = document.getElementById('preview-content');
+            
+            // --- THE FIX IS ON THIS LINE ---
+            // The |safe filter prevents Flask/Jinja2 from escaping the '&' and
+            // other special characters in the URL, ensuring the URL is not corrupted.
+            const downloadUrl = "{{ download_url | safe }}";
+            // -----------------------------
+
+            if (downloadUrl) {
+                previewContainer.style.display = 'block';
+                previewContent.style.display = 'none';
+            }
+
+            printButton.addEventListener('click', function() {
+                previewContent.textContent = 'Loading preview...';
+                previewContent.style.display = 'block';
+
+                fetch(downloadUrl)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`Network response was not ok (status: ${response.status})`);
+                        }
+                        return response.text();
+                    })
+                    .then(csvText => {
+                        const rows = csvText.split('\n');
+                        const extractedText = rows.slice(1).join('\n');
+                        previewContent.textContent = extractedText.trim();
+                        window.print();
+                    })
+                    .catch(error => {
+                        console.error('Error fetching or processing CSV:', error);
+                        previewContent.textContent = 'Error: Could not load the file for preview. Please try downloading it directly.';
+                    });
+            });
+        });
+    </script>
 
 </body>
 </html>
