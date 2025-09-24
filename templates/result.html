@@ -2,88 +2,11 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Processing Complete</title>
-    <!-- Font Awesome for the success icon -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
-    <style>
-        /* Basic Reset and Upscale Background */
-        body {
-            margin: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            background-color: #f4f7f9;
-            color: #333;
-        }
-
-        /* The Main Tile Container */
-        .container {
-            background-color: white;
-            padding: 40px 50px;
-            border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
-            text-align: center;
-            max-width: 500px;
-            width: 90%;
-        }
-
-        h1 {
-            font-size: 1.8rem;
-            margin-bottom: 10px;
-            color: #2c3e50;
-        }
-
-        p {
-            font-size: 1rem;
-            color: #7f8c8d;
-            margin-bottom: 30px;
-            line-height: 1.6;
-        }
-        
-        b {
-            color: #34495e;
-            font-weight: 600;
-        }
-
-        /* Success Icon */
-        .fa-check-circle {
-            font-size: 3rem;
-            color: #2ecc71; /* A nice green for success */
-            margin-bottom: 20px;
-        }
-
-        /* "Upload Another" Link Styled as a Button */
-        .upload-another-btn {
-            display: inline-block;
-            background-color: #3498db;
-            color: white;
-            text-decoration: none;
-            padding: 15px 30px;
-            border-radius: 10px;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background-color 0.3s ease;
-        }
-        .upload-another-btn:hover {
-            background-color: #2980b9;
-        }
-    </style>
+    <title>OCR Result</title>
 </head>
 <body>
-
-    <main class="container">
-        <i class="fa-solid fa-check-circle"></i>
-        <h1>Processing Complete</h1>
-        <p>
-            The extracted text has been successfully saved as <b>{{ csv_filename }}</b> 
-            in the S3 bucket: <b>{{ bucket_name }}</b>.
-        </p>
-        <a href="/" class="upload-another-btn">Upload Another Document</a>
-    </main>
-
+    <h1>Extracted Text</h1>
+    <pre>{{ text }}</pre>
+    <a href="/">Upload another document</a>
 </body>
 </html>
