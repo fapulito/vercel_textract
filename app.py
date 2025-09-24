@@ -3,7 +3,7 @@ import boto3
 import time
 import csv
 import io
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, jsonify
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -44,73 +44,71 @@ def upload():
             response = textract.start_document_text_detection(
                 DocumentLocation={'S3Object': {'Bucket': S3_BUCKET, 'Name': file.filename}}
             )
-            return redirect(url_for('result', job_id=response['JobId'], original_filename=file.filename))
+            # Redirect to the new status page instead of the old result page
+            return redirect(url_for('status', job_id=response['JobId'], original_filename=file.filename))
         except Exception as e:
             return f"An error occurred: {str(e)}", 500
     
     return redirect(url_for('index'))
 
-@app.route('/result/<job_id>/<original_filename>')
-def result(job_id, original_filename):
-    max_retries = 3 
-    retries = 0
-    
-    while retries < max_retries:
-        try:
-            response = textract.get_document_text_detection(JobId=job_id)
-            status = response.get('JobStatus')
+# NEW: Page that shows the spinner and polls the status
+@app.route('/status/<job_id>/<original_filename>')
+def status(job_id, original_filename):
+    return render_template('status.html', job_id=job_id, original_filename=original_filename)
 
-            if status == 'SUCCEEDED':
-                blocks = get_all_textract_blocks(job_id, response)
-                csv_filename = create_and_upload_csv(blocks, original_filename)
-                return render_template('result.html', csv_filename=csv_filename, bucket_name=S3_BUCKET)
-            
-            elif status == 'FAILED':
-                return f"Textract job failed: {response.get('StatusMessage')}", 500
+# NEW: API endpoint for the JavaScript to call
+@app.route('/api/check_status/<job_id>')
+def check_status(job_id):
+    try:
+        response = textract.get_document_text_detection(JobId=job_id)
+        status = response.get('JobStatus')
+        return jsonify({'status': status})
+    except Exception as e:
+        return jsonify({'status': 'FAILED', 'error': str(e)})
 
-            time.sleep(5)
-            retries += 1
-            
-        except Exception as e:
-            return f"An error occurred while checking job status: {str(e)}", 500
+# NEW: Final processing route, called only when the job is done
+@app.route('/process_result/<job_id>/<original_filename>')
+def process_result(job_id, original_filename):
+    try:
+        response = textract.get_document_text_detection(JobId=job_id)
+        if response.get('JobStatus') == 'SUCCEEDED':
+            blocks = get_all_textract_blocks(job_id, response)
+            csv_filename = create_and_upload_csv(blocks, original_filename)
+            # Redirect to the final success page
+            return redirect(url_for('success', csv_filename=csv_filename))
+        else:
+            return "Job did not succeed. Status: " + response.get('JobStatus'), 500
+    except Exception as e:
+        return f"An error occurred during final processing: {str(e)}", 500
 
-    return "The document processing timed out. Please try again with a smaller document.", 504
+# NEW: The final success page (renamed from result.html)
+@app.route('/success/<csv_filename>')
+def success(csv_filename):
+    return render_template('result.html', csv_filename=csv_filename, bucket_name=S3_BUCKET)
 
-# --- Helper Functions ---
+
+# --- Helper Functions (No changes here) ---
 def get_all_textract_blocks(job_id, initial_response):
-    """Paginates through Textract results to get all blocks."""
     blocks = initial_response['Blocks']
     next_token = initial_response.get('NextToken')
-    
     while next_token:
         response = textract.get_document_text_detection(JobId=job_id, NextToken=next_token)
         blocks.extend(response['Blocks'])
         next_token = response.get('NextToken')
-        
     return blocks
 
 def create_and_upload_csv(blocks, original_filename):
-    """Generates a CSV in memory from Textract blocks and uploads it to S3."""
-    # Step 1: Use StringIO to build the CSV in a text buffer
     string_buffer = io.StringIO()
     writer = csv.writer(string_buffer)
-    writer.writerow(['DetectedText']) # Header
-
+    writer.writerow(['DetectedText'])
     for block in blocks:
         if block['BlockType'] == 'LINE':
             writer.writerow([block['Text']])
-    
-    # Step 2: Get the string content and encode it to UTF-8 bytes
     csv_string = string_buffer.getvalue()
     csv_bytes = csv_string.encode('utf-8')
-
-    # Step 3: Create a BytesIO object (in-memory binary buffer)
     bytes_buffer = io.BytesIO(csv_bytes)
-
     base_filename = os.path.splitext(original_filename)[0]
     csv_filename = f"{base_filename}_result.csv"
-    
-    # Step 4: Upload the binary buffer to S3
     s3.upload_fileobj(
         bytes_buffer,
         S3_BUCKET,
