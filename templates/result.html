@@ -78,6 +78,10 @@
                 previewContent.textContent = 'Loading preview...';
                 previewContent.style.display = 'block';
 
+                // --- THIS IS THE DIAGNOSTIC LINE ---
+                console.log("URL being fetched by JavaScript:", downloadUrl);
+                // ------------------------------------
+
                 fetch(downloadUrl)
                     .then(response => {
                         if (!response.ok) {
