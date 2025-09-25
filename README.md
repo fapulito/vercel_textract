@@ -201,3 +201,73 @@ The deployment process remains largely the same, but the local development setup
         *   `AWS_SECRET_ACCESS_KEY`
         *   `AWS_REGION`
         *   `S3_BUCKET`
+
+Of course. Adding a lightweight OAuth layer is an excellent way to secure your app and start building a user base. We'll use **Google OAuth** for this, as it's universally trusted and simple to integrate.
+
+This implementation will use `Flask-Login` for session management, which is a robust and standard way to handle user sessions in Flask.
+
+### Summary of Changes
+
+1.  **Google Cloud Project:** You'll create OAuth 2.0 credentials to get a Client ID and Secret.
+2.  **Dependencies:** We'll add `Flask-Login` and `requests` to your `requirements.txt`.
+3.  **Environment Variables:** You'll add your new Google credentials and a Flask `SECRET_KEY` to your `.env` file.
+4.  **`app.py` Refactor:**
+    *   Integrate `Flask-Login` to manage user sessions.
+    *   Create a simple in-memory "user store" (a dictionary) to hold logged-in user data.
+    *   Add new routes: `/login`, `/callback` (for Google's redirect), and `/logout`.
+    *   Protect your existing application routes (`/`, `/upload`, etc.) so they require a login.
+5.  **New Template:** A new `login.html` page will be created.
+6.  **Template Updates:** Your existing templates will get a "Logout" button.
+
+---
+
+### Step 1: Get Google OAuth 2.0 Credentials
+
+1.  Go to the [Google Cloud Console](https://console.cloud.google.com/).
+2.  Create a new project (or use an existing one).
+3.  Navigate to **APIs & Services -> Credentials**.
+4.  Click **+ CREATE CREDENTIALS** and choose **OAuth client ID**.
+5.  If prompted, configure the **OAuth consent screen**.
+    *   Choose **External** for User Type.
+    *   Fill in the required fields (App name, User support email, Developer contact information).
+    *   On the "Scopes" page, you don't need to add any scopes for now.
+6.  Back on the Credentials screen, create the OAuth client ID:
+    *   **Application type:** Web application.
+    *   **Name:** Give it a name, like "Vercel Textract App".
+    *   **Authorized redirect URIs:** This is critical. You must add both your local development URL and your future Vercel URL.
+        *   `http://127.0.0.1:5000/callback`
+        *   `https://YOUR_APP_NAME.vercel.app/callback` (Add this after you deploy)
+7.  Click **Create**. A window will pop up with your **Client ID** and **Client Secret**. Copy these immediately.
+
+---
+
+### Step 2: Update Project Files
+
+#### 1. `.env` (Updated)
+Add your new Google credentials and a **new Flask Secret Key**. You can generate a good secret key by running `python -c 'import secrets; print(secrets.token_hex())'` in your terminal.
+
+```
+
+```
+
+#### 2. `requirements.txt` (Updated)
+```
+
+```
+
+#### 4. `templates/index.html` (Updated)
+Add a logout button.
+
+```html
+<!-- Add this snippet somewhere convenient, like the top right or bottom -->
+<div style="position: absolute; top: 20px; right: 20px;">
+    <a href="/logout" style="text-decoration: none; color: #7f8c8d;">Logout</a>
+</div>
+```
+
+*(You should add a similar logout link to `result.html` and `status.html` for a consistent experience.)*
+
+#### 5. `app.py` (Fully Refactored)
+
+```
+**Important Note:** Google OAuth now requires HTTPS for all redirect URIs, even for `localhost`. The `ssl_context="adhoc"` argument in `app.run` creates a temporary, self-signed SSL certificate for local development. When you first run it and go to `https://127.0.0.1:5000`, your browser will give you a security warning. You must click "Advanced" and "Proceed to 127.0.0.1 (unsafe)" to continue. This is only necessary for local testing. Vercel will provide a valid SSL certificate for your production app automatically.

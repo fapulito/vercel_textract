@@ -1,4 +1,6 @@
-flask
+Flask
 boto3
 python-dotenv
-
+botocore
+requests
+Flask-Login
