@@ -119,10 +119,10 @@
                 documents processed.
             </p>
 
-            <!-- Example of how to show the upgrade button -->
+            <!-- Example of how to show the upgrade button 
             {% if current_user.tier == 'free' %}
                 <a href="{{ url_for('create_checkout_session') }}">Upgrade to Pro</a>
-            {% endif %}
+            {% endif %} -->
         </div>
 
 
@@ -166,6 +166,10 @@
             }
         });
     </script>
+
+        <div style="position: absolute; top: 20px; right: 20px;">
+            <a href="/logout" style="text-decoration: none; color: #7f8c8d;">Logout</a>
+        </div>
 
 </body>
 </html>
