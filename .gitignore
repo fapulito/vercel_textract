@@ -1,5 +1,6 @@
 # Environment variables
 .env
+.flaskenv
 
 # Python virtual environment
 venv/

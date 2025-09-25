@@ -7,3 +7,4 @@ Flask-Login
 Flask-SQLAlchemy
 psycopg2-binary
 stripe
+cryptography
