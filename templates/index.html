@@ -109,6 +109,23 @@
 <body>
 
     <main class="container">
+        <div id="display-usage">
+            <p>
+                Welcome, {{ current_user.name }}! You are on the <b>{{ current_user.tier }}</b> plan.
+            </p>
+            <p>
+                Monthly Usage: 
+                <b>{{ current_user.documents_processed_this_month }} / {{ plan_limits[current_user.tier]['documents'] }}</b> 
+                documents processed.
+            </p>
+
+            <!-- Example of how to show the upgrade button -->
+            {% if current_user.tier == 'free' %}
+                <a href="{{ url_for('create_checkout_session') }}">Upgrade to Pro</a>
+            {% endif %}
+        </div>
+
+
         <!-- Upload Form View -->
         <div id="upload-form">
             <h1>Document Upload</h1>
