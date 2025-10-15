@@ -104,7 +104,9 @@
 
                 // Use backend preview route instead of direct S3 URL
                 const csvFilename = "{{ csv_filename }}";
-                const previewUrl = `/preview/${encodeURIComponent(csvFilename)}`;
+                // Don't encode here since Flask will handle the path parameter
+                const previewUrl = `/preview/${csvFilename}`;
+                console.log("CSV filename:", csvFilename);
                 console.log("Fetching preview from:", previewUrl);
 
                 fetch(previewUrl)
