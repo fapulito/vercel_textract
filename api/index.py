@@ -382,6 +382,29 @@ def create_app():
             download_url=download_url
         )
 
+    @app.route('/preview/<csv_filename>')
+    @login_required
+    def preview_csv(csv_filename):
+        """Serve CSV content for preview without CORS issues"""
+        s3 = boto3.client('s3', region_name=os.environ.get('AWS_REGION'))
+        try:
+            # Get the CSV content from S3
+            response = s3.get_object(Bucket=os.environ.get('S3_BUCKET'), Key=csv_filename)
+            csv_content = response['Body'].read().decode('utf-8')
+            
+            # Extract just the text content (skip CSV header)
+            lines = csv_content.split('\n')
+            if len(lines) > 1:
+                # Skip the header row and join the rest
+                text_content = '\n'.join(line.strip('"') for line in lines[1:] if line.strip())
+            else:
+                text_content = csv_content
+                
+            return text_content, 200, {'Content-Type': 'text/plain; charset=utf-8'}
+        except Exception as e:
+            print(f"Error fetching CSV for preview: {e}")
+            return "Error: Could not load the file for preview. Please try downloading it directly.", 500
+
     # --- Stripe Payment Routes ---
     @app.route('/create-checkout-session')
     @app.route('/create-checkout-session/<payment_type>')

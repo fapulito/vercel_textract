@@ -102,25 +102,23 @@
                 previewContent.textContent = 'Loading preview...';
                 previewContent.style.display = 'block';
 
-                // --- THIS IS THE DIAGNOSTIC LINE ---
-                console.log("URL being fetched by JavaScript:", downloadUrl);
-                // ------------------------------------
+                // Use backend preview route instead of direct S3 URL
+                const previewUrl = `/preview/{{ csv_filename }}`;
+                console.log("Fetching preview from:", previewUrl);
 
-                fetch(downloadUrl)
+                fetch(previewUrl)
                     .then(response => {
                         if (!response.ok) {
                             throw new Error(`Network response was not ok (status: ${response.status})`);
                         }
                         return response.text();
                     })
-                    .then(csvText => {
-                        const rows = csvText.split('\n');
-                        const extractedText = rows.slice(1).join('\n');
-                        previewContent.textContent = extractedText.trim();
+                    .then(textContent => {
+                        previewContent.textContent = textContent.trim();
                         window.print();
                     })
                     .catch(error => {
-                        console.error('Error fetching or processing CSV:', error);
+                        console.error('Error fetching preview:', error);
                         previewContent.textContent = 'Error: Could not load the file for preview. Please try downloading it directly.';
                     });
             });
