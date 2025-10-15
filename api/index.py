@@ -68,8 +68,8 @@ def create_app():
     if stripe.api_key and stripe.api_key.startswith('sk_live_'):
         print("Warning: Using live Stripe keys. Make sure this is intentional for production.")
     PLAN_LIMITS = {
-        'free': {'documents': 5, 'pages': 3, 'filesize': 2 * 1024 * 1024},
-        'pro': {'documents': 200, 'pages': 50, 'filesize': 20 * 1024 * 1024}
+        'free': {'documents': 5, 'pages': 3, 'filesize': 2 * 1024 * 1024},  # 2MB
+        'pro': {'documents': 200, 'pages': 50, 'filesize': 5 * 1024 * 1024}  # 5MB (reduced from 20MB)
     }
 
     # --- INITIALIZE EXTENSIONS WITH THE APP ---
@@ -255,6 +255,55 @@ def create_app():
             pass
         return render_template('index.html', plan_limits=PLAN_LIMITS)
 
+    @app.route('/admin/stats')
+    @login_required
+    def admin_stats():
+        # Secure admin check using environment variable
+        admin_email = os.environ.get('ADMIN_EMAIL')
+        if not admin_email or current_user.email != admin_email:
+            # Don't reveal that this endpoint exists
+            return "Page not found", 404
+            
+        # Additional security: check if user has been admin for a while (prevent account takeover)
+        if not current_user.tier == 'pro':  # Only pro users can be admins
+            return "Page not found", 404
+            
+        try:
+            total_users = User.query.count()
+            pro_users = User.query.filter_by(tier='pro').count()
+            free_users = User.query.filter_by(tier='free').count()
+            
+            # Monthly usage stats
+            total_docs_this_month = db.session.query(db.func.sum(User.documents_processed_this_month)).scalar() or 0
+            
+            stats = {
+                'total_users': total_users,
+                'pro_subscribers': pro_users,
+                'free_users': free_users,
+                'total_docs_processed': total_docs_this_month
+            }
+            
+            return f"""
+            <html>
+            <head><title>Admin Dashboard</title></head>
+            <body style="font-family: Arial, sans-serif; margin: 40px;">
+                <h2>📊 Admin Dashboard</h2>
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 8px;">
+                    <p><strong>Total Users:</strong> {stats['total_users']}</p>
+                    <p><strong>💰 Pro Subscribers:</strong> {stats['pro_subscribers']}</p>
+                    <p><strong>🆓 Free Users:</strong> {stats['free_users']}</p>
+                    <p><strong>📄 Documents This Month:</strong> {stats['total_docs_processed']}</p>
+                    <p><strong>💵 Estimated Revenue:</strong> ${stats['pro_subscribers'] * 10}/month</p>
+                </div>
+                <br>
+                <a href="/" style="background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">← Back to App</a>
+            </body>
+            </html>
+            """
+        except Exception as e:
+            print(f"Admin stats error: {e}")
+            return "Service temporarily unavailable", 503
+
     @app.route('/upload', methods=['POST'])
     @login_required
     @check_usage_limit
@@ -331,8 +380,9 @@ def create_app():
 
     # --- Stripe Payment Routes ---
     @app.route('/create-checkout-session')
+    @app.route('/create-checkout-session/<payment_type>')
     @login_required
-    def create_checkout_session():
+    def create_checkout_session(payment_type=None):
         try:
             # Use HTTP for local development, HTTPS for production
             scheme = 'https' if request.is_secure or os.environ.get('FLASK_ENV') == 'production' else 'http'
@@ -341,25 +391,95 @@ def create_app():
             success_url = url_for('index', _external=True, _scheme=scheme)
             cancel_url = url_for('index', _external=True, _scheme=scheme)
             
-            session = stripe.checkout.Session.create(
-                customer_email=current_user.email,
-                line_items=[{'price': STRIPE_PRICE_ID, 'quantity': 1}],
-                mode='subscription',
-                success_url=f"{success_url}?payment=success",
-                cancel_url=cancel_url,
-                # Override customer name to show company name
-                customer_creation='always',
-                billing_address_collection='required',
-                custom_text={
-                    'submit': {
-                        'message': 'Subscribe to California Vision OCR Pro Plan'
+            # Determine payment type from URL parameter or environment variable
+            if payment_type is None:
+                payment_type = 'subscription' if os.environ.get('STRIPE_MODE', 'subscription') == 'subscription' else 'onetime'
+            
+            is_subscription = payment_type == 'subscription'
+            
+            # Create or find customer with company name
+            try:
+                # Try to find existing customer by email
+                customers = stripe.Customer.list(email=current_user.email, limit=1)
+                if customers.data:
+                    customer = customers.data[0]
+                    # Update customer name to company name if different
+                    if customer.name != 'California Vision, Inc.':
+                        customer = stripe.Customer.modify(
+                            customer.id,
+                            name='California Vision, Inc.'
+                        )
+                else:
+                    # Create new customer with company name
+                    customer = stripe.Customer.create(
+                        email=current_user.email,
+                        name='California Vision, Inc.',
+                        metadata={
+                            'user_id': str(current_user.id),
+                            'user_name': current_user.name
+                        }
+                    )
+            except Exception as e:
+                print(f"Customer creation error: {e}")
+                # Fallback to email-only checkout
+                customer = None
+
+            if is_subscription:
+                # Subscription mode (recurring payments)
+                price_id = os.environ.get('STRIPE_SUBSCRIPTION_PRICE_ID', os.environ.get('STRIPE_PRICE_ID'))
+                checkout_params = {
+                    'line_items': [{'price': price_id, 'quantity': 1}],
+                    'mode': 'subscription',
+                    'success_url': f"{success_url}?payment=success&type=subscription",
+                    'cancel_url': cancel_url,
+                    'billing_address_collection': 'required',
+                    'custom_text': {
+                        'submit': {
+                            'message': 'Subscribe to California Vision OCR Pro Plan - $10/month'
+                        }
+                    },
+                    'metadata': {
+                        'company_name': 'California Vision, Inc.',
+                        'user_email': current_user.email,
+                        'payment_type': 'subscription'
                     }
-                },
-                metadata={
-                    'company_name': 'California Vision, Inc.',
-                    'user_email': current_user.email
                 }
-            )
+                
+                if customer:
+                    checkout_params['customer'] = customer.id
+                else:
+                    checkout_params['customer_email'] = current_user.email
+                    
+                session = stripe.checkout.Session.create(**checkout_params)
+                
+            else:
+                # One-time payment mode
+                price_id = os.environ.get('STRIPE_ONETIME_PRICE_ID', os.environ.get('STRIPE_PRICE_ID'))
+                checkout_params = {
+                    'line_items': [{'price': price_id, 'quantity': 1}],
+                    'mode': 'payment',
+                    'success_url': f"{success_url}?payment=success&type=onetime",
+                    'cancel_url': cancel_url,
+                    'billing_address_collection': 'required',
+                    'custom_text': {
+                        'submit': {
+                            'message': 'Purchase California Vision OCR Credits - $1 test'
+                        }
+                    },
+                    'metadata': {
+                        'company_name': 'California Vision, Inc.',
+                        'user_email': current_user.email,
+                        'payment_type': 'onetime'
+                    }
+                }
+                
+                if customer:
+                    checkout_params['customer'] = customer.id
+                else:
+                    checkout_params['customer_email'] = current_user.email
+                    checkout_params['customer_creation'] = 'always'
+                    
+                session = stripe.checkout.Session.create(**checkout_params)
             return redirect(session.url)
         except Exception as e:
             return str(e)
@@ -385,9 +505,10 @@ def create_app():
             if customer_email:
                 user = User.query.filter_by(email=customer_email).first()
                 if user:
+                    # For both subscription and one-time payments, upgrade to pro
                     user.tier = 'pro'
                     db.session.commit()
-                    print(f"User {customer_email} upgraded to Pro")
+                    print(f"User {customer_email} upgraded to Pro via {session.get('mode', 'unknown')} payment")
                     
         return jsonify(success=True)
 

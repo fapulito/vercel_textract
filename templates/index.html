@@ -373,9 +373,14 @@
                             </ul>
                         </div>
                     </div>
-                    <a href="{{ url_for('create_checkout_session') }}" class="upgrade-btn">
-                        <i class="fa-solid fa-crown"></i> Upgrade to Pro
-                    </a>
+                    <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+                        <a href="{{ url_for('create_checkout_session', payment_type='subscription') }}" class="upgrade-btn">
+                            <i class="fa-solid fa-crown"></i> Subscribe - $10/month
+                        </a>
+                        <a href="{{ url_for('create_checkout_session', payment_type='onetime') }}" class="upgrade-btn" style="background-color: #27ae60;">
+                            <i class="fa-solid fa-coins"></i> Test Payment - $1
+                        </a>
+                    </div>
                 </div>
             </div>
             {% else %}
