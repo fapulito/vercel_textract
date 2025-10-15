@@ -382,6 +382,56 @@ def create_app():
             download_url=download_url
         )
 
+    @app.route('/preview/<path:csv_filename>')
+    @login_required
+    def preview_csv(csv_filename):
+        """Serve CSV content for preview without CORS issues"""
+        from urllib.parse import unquote
+        
+        # Decode URL-encoded filename (may need multiple decodes)
+        decoded_filename = csv_filename
+        # Keep decoding until no more %XX patterns are found
+        while '%' in decoded_filename:
+            new_decoded = unquote(decoded_filename)
+            if new_decoded == decoded_filename:
+                break  # No more decoding needed
+            decoded_filename = new_decoded
+            
+        print(f"Original filename: {csv_filename}")
+        print(f"Decoded filename: {decoded_filename}")
+        
+        s3 = boto3.client('s3', region_name=os.environ.get('AWS_REGION'), config=Config(signature_version='s3v4', s3={'addressing_style': 'path'}))
+        
+        # Try different filename variations
+        filenames_to_try = [
+            decoded_filename,
+            csv_filename,  # Original encoded version
+            unquote(csv_filename),  # Single decode
+        ]
+        
+        for filename in filenames_to_try:
+            try:
+                print(f"Trying filename: {filename}")
+                # Get the CSV content from S3
+                response = s3.get_object(Bucket=os.environ.get('S3_BUCKET'), Key=filename)
+                csv_content = response['Body'].read().decode('utf-8')
+                
+                # Extract just the text content (skip CSV header)
+                lines = csv_content.split('\n')
+                if len(lines) > 1:
+                    # Skip the header row and join the rest
+                    text_content = '\n'.join(line.strip('"') for line in lines[1:] if line.strip())
+                else:
+                    text_content = csv_content
+                    
+                return text_content, 200, {'Content-Type': 'text/plain; charset=utf-8'}
+            except Exception as e:
+                print(f"Failed with filename '{filename}': {e}")
+                continue
+        
+        # If all attempts failed, return error
+        return "Error: Could not load the file for preview. The file may have been moved or deleted.", 500
+
     # --- Stripe Payment Routes ---
     @app.route('/create-checkout-session')
     @app.route('/create-checkout-session/<payment_type>')
