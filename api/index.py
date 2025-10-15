@@ -248,7 +248,11 @@ def create_app():
     def index():
         # Check for payment success
         if request.args.get('payment') == 'success':
-            flash("Welcome to Pro! Your upgrade is being processed and will be active shortly.", "success")
+            payment_type = request.args.get('type')
+            if payment_type == 'subscription':
+                flash("Welcome to Pro! Your upgrade is being processed and will be active shortly.", "success")
+            elif payment_type == 'onetime':
+                flash("Test payment successful! Thank you for testing our system.", "success")
         # Clear any old flash messages on successful login
         elif current_user.is_authenticated:
             # This ensures we start fresh when user is properly logged in
@@ -397,32 +401,9 @@ def create_app():
             
             is_subscription = payment_type == 'subscription'
             
-            # Create or find customer with company name
-            try:
-                # Try to find existing customer by email
-                customers = stripe.Customer.list(email=current_user.email, limit=1)
-                if customers.data:
-                    customer = customers.data[0]
-                    # Update customer name to company name if different
-                    if customer.name != 'California Vision, Inc.':
-                        customer = stripe.Customer.modify(
-                            customer.id,
-                            name='California Vision, Inc.'
-                        )
-                else:
-                    # Create new customer with company name
-                    customer = stripe.Customer.create(
-                        email=current_user.email,
-                        name='California Vision, Inc.',
-                        metadata={
-                            'user_id': str(current_user.id),
-                            'user_name': current_user.name
-                        }
-                    )
-            except Exception as e:
-                print(f"Customer creation error: {e}")
-                # Fallback to email-only checkout
-                customer = None
+            # Use simple email-based checkout (no custom customer creation)
+            # This will use the user's actual name from their Google account
+            customer = None
 
             if is_subscription:
                 # Subscription mode (recurring payments)
@@ -445,10 +426,8 @@ def create_app():
                     }
                 }
                 
-                if customer:
-                    checkout_params['customer'] = customer.id
-                else:
-                    checkout_params['customer_email'] = current_user.email
+                # Always use customer_email to preserve user's actual name from Google account
+                checkout_params['customer_email'] = current_user.email
                     
                 session = stripe.checkout.Session.create(**checkout_params)
                 
@@ -473,11 +452,9 @@ def create_app():
                     }
                 }
                 
-                if customer:
-                    checkout_params['customer'] = customer.id
-                else:
-                    checkout_params['customer_email'] = current_user.email
-                    checkout_params['customer_creation'] = 'always'
+                # Always use customer_email to preserve user's actual name from Google account
+                checkout_params['customer_email'] = current_user.email
+                checkout_params['customer_creation'] = 'always'
                     
                 session = stripe.checkout.Session.create(**checkout_params)
             return redirect(session.url)
@@ -505,10 +482,19 @@ def create_app():
             if customer_email:
                 user = User.query.filter_by(email=customer_email).first()
                 if user:
-                    # For both subscription and one-time payments, upgrade to pro
-                    user.tier = 'pro'
-                    db.session.commit()
-                    print(f"User {customer_email} upgraded to Pro via {session.get('mode', 'unknown')} payment")
+                    # Check payment type from metadata
+                    payment_type = session.get('metadata', {}).get('payment_type', 'unknown')
+                    session_mode = session.get('mode', 'unknown')
+                    
+                    if session_mode == 'subscription' or payment_type == 'subscription':
+                        # Only upgrade to pro for actual subscriptions
+                        user.tier = 'pro'
+                        db.session.commit()
+                        print(f"User {customer_email} upgraded to Pro via subscription")
+                    else:
+                        # For test payments, just log but don't upgrade
+                        print(f"User {customer_email} completed test payment (${session.get('amount_total', 0)/100}) - no tier change")
+                        # Optionally, you could create a 'test' tier or track test payments differently
                     
         return jsonify(success=True)
 
