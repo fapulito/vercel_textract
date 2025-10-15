@@ -7,12 +7,18 @@ import requests
 import json
 import datetime
 import stripe
+import logging
 from functools import wraps
-from flask import Flask, render_template, request, redirect, url_for, jsonify, flash
+from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, send_from_directory
 from flask_login import LoginManager, current_user, login_required, login_user, logout_user, UserMixin
 from flask_sqlalchemy import SQLAlchemy
 from dotenv import load_dotenv
 from botocore.client import Config
+
+# Reduce AWS SDK logging noise
+logging.getLogger('botocore').setLevel(logging.WARNING)
+logging.getLogger('boto3').setLevel(logging.WARNING)
+logging.getLogger('urllib3').setLevel(logging.WARNING)
 
 # --- 1. Initialize Extensions (globally) ---
 db = SQLAlchemy()
@@ -270,6 +276,17 @@ def create_app():
         return decorated_function
 
     # --- Core Application Routes ---
+    @app.route('/favicon.ico')
+    def favicon():
+        """Serve favicon from root directory"""
+        try:
+            # Try to serve from root directory (one level up from api/)
+            return send_from_directory(os.path.join(app.root_path, '..'), 'favicon.ico', mimetype='image/vnd.microsoft.icon')
+        except Exception as e:
+            print(f"Favicon error: {e}")
+            # Return a 204 No Content response to prevent browser errors
+            return '', 204
+
     @app.route('/')
     @login_required
     def index():
