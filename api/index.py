@@ -76,6 +76,14 @@ def create_app():
     db.init_app(app)
     login_manager.init_app(app)
     login_manager.login_view = 'login_page'
+    
+    # Create tables if they don't exist (for Vercel)
+    with app.app_context():
+        try:
+            db.create_all()
+            print("Database tables created/verified")
+        except Exception as e:
+            print(f"Database initialization error: {e}")
 
     # --- HELPER FUNCTIONS (Needed for routes) ---
     def get_all_textract_blocks(job_id, initial_response):
@@ -122,7 +130,9 @@ def create_app():
 
     @app.route("/login")
     def login():
-        google_provider_cfg = requests.get(os.environ.get('GOOGLE_DISCOVERY_URL')).json()
+        discovery_url = os.environ.get('GOOGLE_DISCOVERY_URL')
+        print(f"Discovery URL: '{discovery_url}'")  # Debug logging
+        google_provider_cfg = requests.get(discovery_url).json()
         authorization_endpoint = google_provider_cfg["authorization_endpoint"]
         # Use HTTP for local development, HTTPS for production/Vercel
         is_vercel = 'vercel.app' in request.host
@@ -132,43 +142,81 @@ def create_app():
 
     @app.route("/login/callback")
     def callback():
-        code = request.args.get("code")
-        google_provider_cfg = requests.get(os.environ.get('GOOGLE_DISCOVERY_URL')).json()
-        token_endpoint = google_provider_cfg["token_endpoint"]
-        # Use HTTP for local development, HTTPS for production/Vercel
-        is_vercel = 'vercel.app' in request.host
-        scheme = 'https' if (request.is_secure or os.environ.get('FLASK_ENV') == 'production' or is_vercel) else 'http'
-        token_response = requests.post(token_endpoint, data={"client_id": os.environ.get('GOOGLE_CLIENT_ID'), "client_secret": os.environ.get('GOOGLE_CLIENT_SECRET'), "grant_type": "authorization_code", "code": code, "redirect_uri": url_for('callback', _external=True, _scheme=scheme)}).json()
-        # Check for token response errors
-        if 'error' in token_response:
-            print(f"Token error: {token_response}")
-            return f"OAuth error: {token_response.get('error_description', 'Unknown error')}", 400
+        try:
+            print("=== OAuth Callback Started ===")
+            code = request.args.get("code")
+            print(f"Authorization code received: {code[:10]}..." if code else "No code received")
             
-        if 'access_token' not in token_response:
-            print(f"No access token in response: {token_response}")
-            return "Failed to get access token from Google", 400
+            if not code:
+                return "No authorization code received from Google", 400
             
-        userinfo_endpoint = google_provider_cfg["userinfo_endpoint"]
-        userinfo_response = requests.get(userinfo_endpoint, headers={"Authorization": f"Bearer {token_response['access_token']}"}).json()
-        
-        if userinfo_response.get("email_verified"):
-            unique_id = userinfo_response["sub"]
-            users_email = userinfo_response["email"]
-            users_name = userinfo_response.get("given_name", userinfo_response.get("name", "User"))
+            discovery_url = os.environ.get('GOOGLE_DISCOVERY_URL')
+            print(f"Discovery URL: '{discovery_url}'")
             
-            try:
+            google_provider_cfg = requests.get(discovery_url).json()
+            token_endpoint = google_provider_cfg["token_endpoint"]
+            print(f"Token endpoint: {token_endpoint}")
+            
+            # Use HTTP for local development, HTTPS for production/Vercel
+            is_vercel = 'vercel.app' in request.host
+            scheme = 'https' if (request.is_secure or os.environ.get('FLASK_ENV') == 'production' or is_vercel) else 'http'
+            print(f"Using scheme: {scheme}, Host: {request.host}")
+            
+            redirect_uri = url_for('callback', _external=True, _scheme=scheme)
+            print(f"Redirect URI: {redirect_uri}")
+            
+            token_response = requests.post(token_endpoint, data={
+                "client_id": os.environ.get('GOOGLE_CLIENT_ID'),
+                "client_secret": os.environ.get('GOOGLE_CLIENT_SECRET'),
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": redirect_uri
+            }).json()
+            
+            print(f"Token response keys: {list(token_response.keys())}")
+            
+            # Check for token response errors
+            if 'error' in token_response:
+                print(f"Token error: {token_response}")
+                return f"OAuth error: {token_response.get('error_description', 'Unknown error')}", 400
+                
+            if 'access_token' not in token_response:
+                print(f"No access token in response: {token_response}")
+                return "Failed to get access token from Google", 400
+                
+            userinfo_endpoint = google_provider_cfg["userinfo_endpoint"]
+            userinfo_response = requests.get(userinfo_endpoint, headers={"Authorization": f"Bearer {token_response['access_token']}"}).json()
+            
+            print(f"User info received: {userinfo_response.get('email', 'No email')}")
+            
+            if userinfo_response.get("email_verified"):
+                unique_id = userinfo_response["sub"]
+                users_email = userinfo_response["email"]
+                users_name = userinfo_response.get("given_name", userinfo_response.get("name", "User"))
+                
+                print(f"Creating/finding user: {users_email}")
+                
                 user = User.query.filter_by(google_id=unique_id).first()
                 if not user:
+                    print("Creating new user")
                     user = User(google_id=unique_id, name=users_name, email=users_email)
                     db.session.add(user)
                     db.session.commit()
-                login_user(user)
-                return redirect(url_for("index"))
-            except Exception as e:
-                print(f"Database error: {e}")
-                return f"Database error: {str(e)}", 500
+                else:
+                    print("User found, logging in")
                 
-        return "User email not available or not verified by Google.", 400
+                login_user(user)
+                print("User logged in successfully, redirecting to index")
+                return redirect(url_for("index"))
+                
+            print("Email not verified by Google")
+            return "User email not available or not verified by Google.", 400
+            
+        except Exception as e:
+            print(f"Callback error: {str(e)}")
+            import traceback
+            print(f"Traceback: {traceback.format_exc()}")
+            return f"Internal error: {str(e)}", 500
 
     @app.route("/logout")
     @login_required
