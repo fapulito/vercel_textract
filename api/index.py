@@ -7,12 +7,18 @@ import requests
 import json
 import datetime
 import stripe
+import logging
 from functools import wraps
-from flask import Flask, render_template, request, redirect, url_for, jsonify, flash
+from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, send_from_directory
 from flask_login import LoginManager, current_user, login_required, login_user, logout_user, UserMixin
 from flask_sqlalchemy import SQLAlchemy
 from dotenv import load_dotenv
 from botocore.client import Config
+
+# Reduce AWS SDK logging noise
+logging.getLogger('botocore').setLevel(logging.WARNING)
+logging.getLogger('boto3').setLevel(logging.WARNING)
+logging.getLogger('urllib3').setLevel(logging.WARNING)
 
 # --- 1. Initialize Extensions (globally) ---
 db = SQLAlchemy()
@@ -43,6 +49,15 @@ def create_app():
     app.secret_key = os.environ.get('SECRET_KEY')
     app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    # Add connection pool settings for better reliability
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'pool_pre_ping': True,  # Verify connections before use
+        'pool_recycle': 300,    # Recycle connections every 5 minutes
+        'connect_args': {
+            'connect_timeout': 10,
+            'sslmode': 'require'
+        }
+    }
     # Stripe configuration
     stripe.api_key = os.environ.get('STRIPE_SECRET_KEY')
     STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
@@ -196,18 +211,36 @@ def create_app():
                 
                 print(f"Creating/finding user: {users_email}")
                 
-                user = User.query.filter_by(google_id=unique_id).first()
-                if not user:
-                    print("Creating new user")
-                    user = User(google_id=unique_id, name=users_name, email=users_email)
-                    db.session.add(user)
-                    db.session.commit()
-                else:
-                    print("User found, logging in")
-                
-                login_user(user)
-                print("User logged in successfully, redirecting to index")
-                return redirect(url_for("index"))
+                # Database operations with retry logic for connection issues
+                max_retries = 3
+                for attempt in range(max_retries):
+                    try:
+                        user = User.query.filter_by(google_id=unique_id).first()
+                        if not user:
+                            print("Creating new user")
+                            user = User(google_id=unique_id, name=users_name, email=users_email)
+                            db.session.add(user)
+                            db.session.commit()
+                        else:
+                            print("User found, logging in")
+                        
+                        login_user(user)
+                        print("User logged in successfully, redirecting to index")
+                        return redirect(url_for("index"))
+                        
+                    except Exception as db_error:
+                        print(f"Database attempt {attempt + 1} failed: {db_error}")
+                        if attempt < max_retries - 1:
+                            # Rollback and retry
+                            db.session.rollback()
+                            import time
+                            time.sleep(1)  # Wait 1 second before retry
+                            continue
+                        else:
+                            # Final attempt failed
+                            db.session.rollback()
+                            print(f"All database attempts failed for user {users_email}")
+                            return "Database temporarily unavailable. Please try signing in again in a moment.", 503
                 
             print("Email not verified by Google")
             return "User email not available or not verified by Google.", 400
@@ -243,6 +276,17 @@ def create_app():
         return decorated_function
 
     # --- Core Application Routes ---
+    @app.route('/favicon.ico')
+    def favicon():
+        """Serve favicon from root directory"""
+        try:
+            # Try to serve from root directory (one level up from api/)
+            return send_from_directory(os.path.join(app.root_path, '..'), 'favicon.ico', mimetype='image/vnd.microsoft.icon')
+        except Exception as e:
+            print(f"Favicon error: {e}")
+            # Return a 204 No Content response to prevent browser errors
+            return '', 204
+
     @app.route('/')
     @login_required
     def index():
