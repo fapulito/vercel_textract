@@ -341,7 +341,7 @@
                     <div class="usage-bar-container">
                         <div class="usage-label">Monthly Usage</div>
                         <div class="usage-bar">
-                            <div class="usage-fill" style="width: {{ (current_user.documents_processed_this_month / plan_limits[current_user.tier]['documents'] * 100)|round }}%"></div>
+                            <div class="usage-fill" id="usage-fill-bar" data-usage="{{ (current_user.documents_processed_this_month / plan_limits[current_user.tier]['documents'] * 100)|round }}"></div>
                         </div>
                         <div class="usage-text">
                             {{ current_user.documents_processed_this_month }} / {{ plan_limits[current_user.tier]['documents'] }} documents
@@ -411,6 +411,15 @@
     </main>
 
     <script>
+        // Set usage bar width
+        document.addEventListener('DOMContentLoaded', function() {
+            const usageBar = document.getElementById('usage-fill-bar');
+            if (usageBar) {
+                const usagePercentage = usageBar.getAttribute('data-usage');
+                usageBar.style.width = usagePercentage + '%';
+            }
+        });
+
         document.getElementById('main-form').addEventListener('submit', function() {
             // Hide the form
             document.getElementById('upload-form').style.display = 'none';
@@ -433,6 +442,11 @@
         <div style="position: absolute; top: 20px; right: 20px;">
             <a href="/logout" style="text-decoration: none; color: #7f8c8d;">Logout</a>
         </div>
+
+    <!-- Footer -->
+    <footer style="position: fixed; bottom: 0; left: 0; right: 0; background-color: rgba(255, 255, 255, 0.9); padding: 10px; text-align: center; font-size: 0.8rem; color: #7f8c8d; border-top: 1px solid #ecf0f1;">
+        Created by California Vision, Inc. © 2025
+    </footer>
 
 </body>
 </html>

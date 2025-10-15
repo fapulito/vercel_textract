@@ -249,6 +249,10 @@ def create_app():
         # Check for payment success
         if request.args.get('payment') == 'success':
             flash("Welcome to Pro! Your upgrade is being processed and will be active shortly.", "success")
+        # Clear any old flash messages on successful login
+        elif current_user.is_authenticated:
+            # This ensures we start fresh when user is properly logged in
+            pass
         return render_template('index.html', plan_limits=PLAN_LIMITS)
 
     @app.route('/upload', methods=['POST'])
@@ -343,6 +347,18 @@ def create_app():
                 mode='subscription',
                 success_url=f"{success_url}?payment=success",
                 cancel_url=cancel_url,
+                # Override customer name to show company name
+                customer_creation='always',
+                billing_address_collection='required',
+                custom_text={
+                    'submit': {
+                        'message': 'Subscribe to California Vision OCR Pro Plan'
+                    }
+                },
+                metadata={
+                    'company_name': 'California Vision, Inc.',
+                    'user_email': current_user.email
+                }
             )
             return redirect(session.url)
         except Exception as e:
