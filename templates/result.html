@@ -103,7 +103,8 @@
                 previewContent.style.display = 'block';
 
                 // Use backend preview route instead of direct S3 URL
-                const previewUrl = `/preview/{{ csv_filename }}`;
+                const csvFilename = "{{ csv_filename }}";
+                const previewUrl = `/preview/${encodeURIComponent(csvFilename)}`;
                 console.log("Fetching preview from:", previewUrl);
 
                 fetch(previewUrl)
