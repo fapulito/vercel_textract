@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -61,10 +62,12 @@
             cursor: pointer;
             transition: all 0.2s ease;
         }
+
         .file-input-wrapper:hover {
             border-color: #3498db;
             background-color: #fafdff;
         }
+
         input[type="file"] {
             position: absolute;
             font-size: 100px;
@@ -73,6 +76,7 @@
             opacity: 0;
             cursor: pointer;
         }
+
         .file-input-label {
             color: #7f8c8d;
         }
@@ -89,17 +93,20 @@
             cursor: pointer;
             transition: background-color 0.3s ease;
         }
+
         .submit-btn:hover {
             background-color: #2980b9;
         }
 
         /* Loading Spinner State */
         #loading-state {
-            display: none; /* Hidden by default */
+            display: none;
+            /* Hidden by default */
             flex-direction: column;
             align-items: center;
             gap: 20px;
         }
+
         .fa-hourglass-half {
             font-size: 3rem;
             color: #3498db;
@@ -112,13 +119,13 @@
             background-color: #f8f9fa;
             border-radius: 10px;
         }
+
         .welcome-text {
             font-size: 1.1rem;
             margin-bottom: 15px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
+            text-align: center;
         }
+
         .tier-badge {
             padding: 4px 12px;
             border-radius: 20px;
@@ -126,10 +133,12 @@
             font-weight: 600;
             text-transform: uppercase;
         }
+
         .tier-free {
             background-color: #95a5a6;
             color: white;
         }
+
         .tier-pro {
             background-color: #f39c12;
             color: white;
@@ -139,11 +148,13 @@
         .usage-bar-container {
             margin-top: 10px;
         }
+
         .usage-label {
             font-size: 0.9rem;
             color: #7f8c8d;
             margin-bottom: 5px;
         }
+
         .usage-bar {
             width: 100%;
             height: 8px;
@@ -152,11 +163,13 @@
             overflow: hidden;
             margin-bottom: 5px;
         }
+
         .usage-fill {
             height: 100%;
             background-color: #3498db;
             transition: width 0.3s ease;
         }
+
         .usage-text {
             font-size: 0.8rem;
             color: #7f8c8d;
@@ -167,6 +180,7 @@
         .upgrade-section {
             margin-bottom: 30px;
         }
+
         .upgrade-card {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -174,38 +188,46 @@
             border-radius: 15px;
             text-align: center;
         }
+
         .upgrade-card h3 {
             margin: 0 0 20px 0;
             font-size: 1.4rem;
         }
+
         .plan-comparison {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 20px;
             margin-bottom: 25px;
         }
+
         .plan-column {
             background-color: rgba(255, 255, 255, 0.1);
             padding: 15px;
             border-radius: 10px;
         }
+
         .plan-column h4 {
             margin: 0 0 10px 0;
             font-size: 1rem;
         }
+
         .plan-column ul {
             list-style: none;
             padding: 0;
             margin: 0;
         }
+
         .plan-column li {
             padding: 3px 0;
             font-size: 0.9rem;
         }
+
         .pro-plan {
             background-color: rgba(255, 255, 255, 0.2);
             border: 2px solid rgba(255, 255, 255, 0.3);
         }
+
         .upgrade-btn {
             display: inline-block;
             background-color: #f39c12;
@@ -218,11 +240,13 @@
             transition: all 0.3s ease;
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
         }
+
         .upgrade-btn:hover {
             background-color: #e67e22;
             transform: translateY(-2px);
             box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
         }
+
         .upgrade-btn .fa-crown {
             margin-right: 8px;
         }
@@ -231,6 +255,7 @@
         .pro-status {
             margin-bottom: 30px;
         }
+
         .pro-badge {
             background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
             color: white;
@@ -239,6 +264,7 @@
             text-align: center;
             font-weight: 600;
         }
+
         .pro-badge .fa-crown {
             margin-right: 10px;
             color: #ffd700;
@@ -248,6 +274,7 @@
         .flash-messages {
             margin-bottom: 20px;
         }
+
         .flash-message {
             padding: 15px;
             border-radius: 8px;
@@ -256,21 +283,25 @@
             align-items: center;
             gap: 10px;
         }
+
         .flash-upgrade {
             background-color: #fff3cd;
             border: 1px solid #ffeaa7;
             color: #856404;
         }
+
         .flash-warning {
             background-color: #f8d7da;
             border: 1px solid #f5c6cb;
             color: #721c24;
         }
+
         .flash-success {
             background-color: #d4edda;
             border: 1px solid #c3e6cb;
             color: #155724;
         }
+
         .flash-upgrade-btn {
             background-color: #f39c12;
             color: white;
@@ -282,6 +313,7 @@
             margin-left: auto;
             transition: background-color 0.3s ease;
         }
+
         .flash-upgrade-btn:hover {
             background-color: #e67e22;
         }
@@ -291,16 +323,19 @@
             .plan-comparison {
                 grid-template-columns: 1fr;
             }
+
             .welcome-text {
                 flex-direction: column;
                 align-items: flex-start;
                 gap: 5px;
             }
+
             .flash-message {
                 flex-direction: column;
                 align-items: flex-start;
                 gap: 10px;
             }
+
             .flash-upgrade-btn {
                 margin-left: 0;
                 align-self: stretch;
@@ -309,42 +344,49 @@
         }
     </style>
 </head>
+
 <body>
 
     <main class="container">
         <!-- Flash Messages -->
         {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                <div class="flash-messages">
-                    {% for category, message in messages %}
-                        <div class="flash-message flash-{{ category }}">
-                            {% if category == 'upgrade' %}
-                                <i class="fa-solid fa-exclamation-triangle"></i>
-                                {{ message }}
-                                <a href="{{ url_for('create_checkout_session') }}" class="flash-upgrade-btn">Upgrade Now</a>
-                            {% else %}
-                                {{ message }}
-                            {% endif %}
-                        </div>
-                    {% endfor %}
-                </div>
-            {% endif %}
+        {% if messages %}
+        <div class="flash-messages">
+            {% for category, message in messages %}
+            <div class="flash-message flash-{{ category }}">
+                {% if category == 'upgrade' %}
+                <i class="fa-solid fa-exclamation-triangle"></i>
+                {{ message }}
+                <a href="{{ url_for('create_checkout_session') }}" class="flash-upgrade-btn">Upgrade Now</a>
+                {% else %}
+                {{ message }}
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
         {% endwith %}
 
         <div id="display-usage">
             <div class="user-info">
                 <p class="welcome-text">
-                    Welcome, {{ current_user.name }}! 
-                    <span class="tier-badge tier-{{ current_user.tier }}">{{ current_user.tier|title }}</span>
+                    Welcome to OCR by California Vision - Public Beta
+                </p>
+                <p style="font-size: 0.9rem; margin-top: 10px; text-align: center;"></p>
+                Hello, {{ current_user.name }}!
+                <span class="tier-badge tier-{{ current_user.tier }}">{{ current_user.tier|title }}</span>
                 </p>
                 <div class="usage-stats">
                     <div class="usage-bar-container">
                         <div class="usage-label">Monthly Usage</div>
                         <div class="usage-bar">
-                            <div class="usage-fill" id="usage-fill-bar" data-usage="{{ (current_user.documents_processed_this_month / plan_limits[current_user.tier]['documents'] * 100)|round }}"></div>
+                            <div class="usage-fill" id="usage-fill-bar"
+                                data-usage="{{ (current_user.documents_processed_this_month / plan_limits[current_user.tier]['documents'] * 100)|round }}">
+                            </div>
                         </div>
                         <div class="usage-text">
-                            {{ current_user.documents_processed_this_month }} / {{ plan_limits[current_user.tier]['documents'] }} documents
+                            {{ current_user.documents_processed_this_month }} / {{
+                            plan_limits[current_user.tier]['documents'] }} documents
                         </div>
                     </div>
                 </div>
@@ -374,10 +416,12 @@
                         </div>
                     </div>
                     <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
-                        <a href="{{ url_for('create_checkout_session', payment_type='subscription') }}" class="upgrade-btn">
+                        <a href="{{ url_for('create_checkout_session', payment_type='subscription') }}"
+                            class="upgrade-btn">
                             <i class="fa-solid fa-crown"></i> Subscribe - $10/month
                         </a>
-                        <a href="{{ url_for('create_checkout_session', payment_type='onetime') }}" class="upgrade-btn" style="background-color: #27ae60;">
+                        <a href="{{ url_for('create_checkout_session', payment_type='onetime') }}" class="upgrade-btn"
+                            style="background-color: #27ae60;">
                             <i class="fa-solid fa-coins"></i> Test Payment - $1
                         </a>
                     </div>
@@ -417,7 +461,7 @@
 
     <script>
         // Set usage bar width
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             const usageBar = document.getElementById('usage-fill-bar');
             if (usageBar) {
                 const usagePercentage = usageBar.getAttribute('data-usage');
@@ -425,7 +469,7 @@
             }
         });
 
-        document.getElementById('main-form').addEventListener('submit', function() {
+        document.getElementById('main-form').addEventListener('submit', function () {
             // Hide the form
             document.getElementById('upload-form').style.display = 'none';
             // Show the loading spinner
@@ -435,7 +479,7 @@
         // Update file input label with the selected filename
         const fileUpload = document.getElementById('file-upload');
         const fileLabel = document.querySelector('.file-input-label');
-        fileUpload.addEventListener('change', function() {
+        fileUpload.addEventListener('change', function () {
             if (this.files && this.files.length > 0) {
                 fileLabel.textContent = this.files[0].name;
             } else {
@@ -444,14 +488,16 @@
         });
     </script>
 
-        <div style="position: absolute; top: 20px; right: 20px;">
-            <a href="/logout" style="text-decoration: none; color: #7f8c8d;">Logout</a>
-        </div>
+    <div style="position: absolute; top: 20px; right: 20px;">
+        <a href="/logout" style="text-decoration: none; color: #7f8c8d;">Logout</a>
+    </div>
 
     <!-- Footer -->
-    <footer style="position: fixed; bottom: 0; left: 0; right: 0; background-color: rgba(255, 255, 255, 0.9); padding: 10px; text-align: center; font-size: 0.8rem; color: #7f8c8d; border-top: 1px solid #ecf0f1;">
+    <footer
+        style="position: fixed; bottom: 0; left: 0; right: 0; background-color: rgba(255, 255, 255, 0.9); padding: 10px; text-align: center; font-size: 0.8rem; color: #7f8c8d; border-top: 1px solid #ecf0f1;">
         Created by California Vision, Inc. © 2025
     </footer>
 
 </body>
+
 </html>
