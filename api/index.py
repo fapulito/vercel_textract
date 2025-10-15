@@ -43,9 +43,30 @@ def create_app():
     app.secret_key = os.environ.get('SECRET_KEY')
     app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    # Stripe configuration
     stripe.api_key = os.environ.get('STRIPE_SECRET_KEY')
     STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
     STRIPE_PRICE_ID = os.environ.get('STRIPE_PRICE_ID')
+    
+    # Validate Stripe configuration
+    stripe_enabled = bool(stripe.api_key and STRIPE_PRICE_ID)
+    if not stripe_enabled:
+        print("Info: Stripe not fully configured. Payment features disabled.")
+    elif stripe.api_key and stripe.api_key.startswith('sk_live_'):
+        print("✅ Production: Using live Stripe keys")
+        # Additional production validation
+        if not STRIPE_WEBHOOK_SECRET:
+            print("⚠️  Warning: Live webhook secret not configured!")
+    else:
+        print("🧪 Development: Using test Stripe keys")
+    
+    # Validate Stripe configuration
+    if not all([stripe.api_key, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_ID]):
+        print("Warning: Stripe configuration incomplete. Payment features may not work.")
+    
+    # Check if using test vs live keys
+    if stripe.api_key and stripe.api_key.startswith('sk_live_'):
+        print("Warning: Using live Stripe keys. Make sure this is intentional for production.")
     PLAN_LIMITS = {
         'free': {'documents': 5, 'pages': 3, 'filesize': 2 * 1024 * 1024},
         'pro': {'documents': 200, 'pages': 50, 'filesize': 20 * 1024 * 1024}
@@ -245,26 +266,37 @@ def create_app():
         try:
             # Use HTTP for local development, HTTPS for production
             scheme = 'https' if request.is_secure or os.environ.get('FLASK_ENV') == 'production' else 'http'
+            
+            # Generate URLs with proper scheme
+            success_url = url_for('index', _external=True, _scheme=scheme)
+            cancel_url = url_for('index', _external=True, _scheme=scheme)
+            
             session = stripe.checkout.Session.create(
                 customer_email=current_user.email,
                 line_items=[{'price': STRIPE_PRICE_ID, 'quantity': 1}],
                 mode='subscription',
-                success_url=url_for('index', _external=True, _scheme=scheme) + '?payment=success',
-                cancel_url=url_for('index', _external=True, _scheme=scheme),
+                success_url=f"{success_url}?payment=success",
+                cancel_url=cancel_url,
             )
-            return redirect(session.url, code=303)
+            return redirect(session.url)
         except Exception as e:
             return str(e)
 
     @app.route('/stripe-webhook', methods=['POST'])
     def stripe_webhook():
+        if not STRIPE_WEBHOOK_SECRET:
+            return 'Webhook not configured', 400
+            
         payload = request.data
         sig_header = request.headers.get('STRIPE_SIGNATURE')
         event = None
+        
         try:
             event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
         except (ValueError, stripe.error.SignatureVerificationError) as e:
+            print(f"Webhook signature verification failed: {e}")
             return 'Invalid payload or signature', 400
+            
         if event['type'] == 'checkout.session.completed':
             session = event['data']['object']
             customer_email = session.get('customer_email')
@@ -273,6 +305,8 @@ def create_app():
                 if user:
                     user.tier = 'pro'
                     db.session.commit()
+                    print(f"User {customer_email} upgraded to Pro")
+                    
         return jsonify(success=True)
 
     return app
