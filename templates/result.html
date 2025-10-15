@@ -4,9 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Processing Complete</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <style>
-        /* All CSS remains the same */
+        /* All your existing CSS is correct and remains the same */
         body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 100vh; background-color: #f4f7f9; color: #333; padding: 20px 0; }
         .container { background-color: white; padding: 40px 50px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08); text-align: center; max-width: 500px; width: 90%; margin-bottom: 30px; }
         h1 { font-size: 1.8rem; margin-bottom: 10px; color: #2c3e50; }
@@ -23,6 +24,13 @@
         .print-btn:hover { background-color: #732d91; }
         .print-btn .fa-print { margin-right: 10px; }
         #preview-content { background-color: #fdfdfe; border: 1px solid #ecf0f1; border-radius: 8px; padding: 20px; margin-top: 20px; text-align: left; max-height: 400px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; font-family: 'Courier New', Courier, monospace; font-size: 0.9rem; line-height: 1.5; color: #34495e; }
+        
+        /* Upgrade Prompt */
+        .upgrade-prompt { margin-top: 20px; text-align: center; }
+        .mini-upgrade-btn { display: inline-block; background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%); color: white; text-decoration: none; padding: 10px 20px; border-radius: 20px; font-size: 0.9rem; font-weight: 600; transition: all 0.3s ease; }
+        .mini-upgrade-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); }
+        .mini-upgrade-btn .fa-crown { margin-right: 5px; color: #ffd700; }
+        
         @media print {
             body > *:not(#print-preview-container) { display: none !important; }
             #print-preview-container, #preview-content { display: block !important; box-shadow: none !important; border: none !important; max-height: none !important; overflow: visible !important; width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 0 !important; }
@@ -32,6 +40,11 @@
 <body>
 
     <!-- Main Results Box -->
+    <!-- Beta Header -->
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-align: center; padding: 10px 0; font-weight: 600; font-size: 1.1rem;">
+        California Vision OCR Service - Public Beta
+    </div>
+
     <main class="container">
         <i class="fa-solid fa-check-circle"></i>
         <h1>Processing Complete</h1>
@@ -47,6 +60,17 @@
         {% endif %}
 
         <a href="/" class="upload-another-btn">Upload Another Document</a>
+        
+        {% if current_user.tier == 'free' %}
+        <div class="upgrade-prompt">
+            <p style="margin: 20px 0 10px 0; font-size: 0.9rem; color: #7f8c8d;">
+                Enjoying the service? Upgrade to Pro for 40x more documents per month!
+            </p>
+            <a href="{{ url_for('create_checkout_session') }}" class="mini-upgrade-btn">
+                <i class="fa-solid fa-crown"></i> Upgrade to Pro - $10/month
+            </a>
+        </div>
+        {% endif %}
     </main>
 
     <!-- Print Preview Box -->
@@ -63,11 +87,11 @@
             const previewContainer = document.getElementById('print-preview-container');
             const previewContent = document.getElementById('preview-content');
             
-            // --- THE FIX IS ON THIS LINE ---
-            // The |safe filter prevents Flask/Jinja2 from escaping the '&' and
-            // other special characters in the URL, ensuring the URL is not corrupted.
+            // --- THIS IS THE FIX ---
+            // The |safe filter tells the template engine not to escape the special
+            // characters in the URL, ensuring the JavaScript gets the correct, working link.
             const downloadUrl = "{{ download_url | safe }}";
-            // -----------------------------
+            // ------------------------
 
             if (downloadUrl) {
                 previewContainer.style.display = 'block';
@@ -77,6 +101,10 @@
             printButton.addEventListener('click', function() {
                 previewContent.textContent = 'Loading preview...';
                 previewContent.style.display = 'block';
+
+                // --- THIS IS THE DIAGNOSTIC LINE ---
+                console.log("URL being fetched by JavaScript:", downloadUrl);
+                // ------------------------------------
 
                 fetch(downloadUrl)
                     .then(response => {
@@ -102,6 +130,11 @@
     <div style="position: absolute; top: 20px; right: 20px;">
             <a href="/logout" style="text-decoration: none; color: #7f8c8d;">Logout</a>
     </div>
+
+    <!-- Footer -->
+    <footer style="position: fixed; bottom: 0; left: 0; right: 0; background-color: rgba(255, 255, 255, 0.9); padding: 10px; text-align: center; font-size: 0.8rem; color: #7f8c8d; border-top: 1px solid #ecf0f1;">
+        © 2025 California Vision, Inc. All Rights Reserved
+    </footer>
 
 </body>
 </html>
