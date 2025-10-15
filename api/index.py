@@ -103,7 +103,9 @@ def create_app():
     def login():
         google_provider_cfg = requests.get(os.environ.get('GOOGLE_DISCOVERY_URL')).json()
         authorization_endpoint = google_provider_cfg["authorization_endpoint"]
-        request_uri = requests.Request("GET", authorization_endpoint, params={"client_id": os.environ.get('GOOGLE_CLIENT_ID'), "redirect_uri": url_for('callback', _external=True, _scheme='https'), "response_type": "code", "scope": "openid email profile"}).prepare().url
+        # Use HTTP for local development, HTTPS for production
+        scheme = 'https' if request.is_secure or os.environ.get('FLASK_ENV') == 'production' else 'http'
+        request_uri = requests.Request("GET", authorization_endpoint, params={"client_id": os.environ.get('GOOGLE_CLIENT_ID'), "redirect_uri": url_for('callback', _external=True, _scheme=scheme), "response_type": "code", "scope": "openid email profile"}).prepare().url
         return redirect(request_uri)
 
     @app.route("/login/callback")
@@ -111,7 +113,9 @@ def create_app():
         code = request.args.get("code")
         google_provider_cfg = requests.get(os.environ.get('GOOGLE_DISCOVERY_URL')).json()
         token_endpoint = google_provider_cfg["token_endpoint"]
-        token_response = requests.post(token_endpoint, data={"client_id": os.environ.get('GOOGLE_CLIENT_ID'), "client_secret": os.environ.get('GOOGLE_CLIENT_SECRET'), "grant_type": "authorization_code", "code": code, "redirect_uri": url_for('callback', _external=True, _scheme='https')}).json()
+        # Use HTTP for local development, HTTPS for production
+        scheme = 'https' if request.is_secure or os.environ.get('FLASK_ENV') == 'production' else 'http'
+        token_response = requests.post(token_endpoint, data={"client_id": os.environ.get('GOOGLE_CLIENT_ID'), "client_secret": os.environ.get('GOOGLE_CLIENT_SECRET'), "grant_type": "authorization_code", "code": code, "redirect_uri": url_for('callback', _external=True, _scheme=scheme)}).json()
         userinfo_endpoint = google_provider_cfg["userinfo_endpoint"]
         userinfo_response = requests.get(userinfo_endpoint, headers={"Authorization": f"Bearer {token_response['access_token']}"}).json()
         if userinfo_response.get("email_verified"):
@@ -143,7 +147,10 @@ def create_app():
                 db.session.commit()
             limit = PLAN_LIMITS[current_user.tier]['documents']
             if current_user.documents_processed_this_month >= limit:
-                flash(f"You've reached your monthly limit of {limit} documents. Please upgrade to Pro to continue.", "warning")
+                if current_user.tier == 'free':
+                    flash(f"You've reached your monthly limit of {limit} documents. Upgrade to Pro for 200 documents/month!", "upgrade")
+                else:
+                    flash(f"You've reached your monthly limit of {limit} documents. Your limit will reset next month.", "warning")
                 return redirect(url_for('index'))
             return f(*args, **kwargs)
         return decorated_function
@@ -152,6 +159,9 @@ def create_app():
     @app.route('/')
     @login_required
     def index():
+        # Check for payment success
+        if request.args.get('payment') == 'success':
+            flash("Welcome to Pro! Your upgrade is being processed and will be active shortly.", "success")
         return render_template('index.html', plan_limits=PLAN_LIMITS)
 
     @app.route('/upload', methods=['POST'])
@@ -233,12 +243,14 @@ def create_app():
     @login_required
     def create_checkout_session():
         try:
+            # Use HTTP for local development, HTTPS for production
+            scheme = 'https' if request.is_secure or os.environ.get('FLASK_ENV') == 'production' else 'http'
             session = stripe.checkout.Session.create(
                 customer_email=current_user.email,
                 line_items=[{'price': STRIPE_PRICE_ID, 'quantity': 1}],
                 mode='subscription',
-                success_url=url_for('index', _external=True, _scheme='https') + '?payment=success',
-                cancel_url=url_for('index', _external=True, _scheme='https'),
+                success_url=url_for('index', _external=True, _scheme=scheme) + '?payment=success',
+                cancel_url=url_for('index', _external=True, _scheme=scheme),
             )
             return redirect(session.url, code=303)
         except Exception as e:
