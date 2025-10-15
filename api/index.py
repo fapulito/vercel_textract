@@ -124,8 +124,9 @@ def create_app():
     def login():
         google_provider_cfg = requests.get(os.environ.get('GOOGLE_DISCOVERY_URL')).json()
         authorization_endpoint = google_provider_cfg["authorization_endpoint"]
-        # Use HTTP for local development, HTTPS for production
-        scheme = 'https' if request.is_secure or os.environ.get('FLASK_ENV') == 'production' else 'http'
+        # Use HTTP for local development, HTTPS for production/Vercel
+        is_vercel = 'vercel.app' in request.host
+        scheme = 'https' if (request.is_secure or os.environ.get('FLASK_ENV') == 'production' or is_vercel) else 'http'
         request_uri = requests.Request("GET", authorization_endpoint, params={"client_id": os.environ.get('GOOGLE_CLIENT_ID'), "redirect_uri": url_for('callback', _external=True, _scheme=scheme), "response_type": "code", "scope": "openid email profile"}).prepare().url
         return redirect(request_uri)
 
@@ -134,22 +135,39 @@ def create_app():
         code = request.args.get("code")
         google_provider_cfg = requests.get(os.environ.get('GOOGLE_DISCOVERY_URL')).json()
         token_endpoint = google_provider_cfg["token_endpoint"]
-        # Use HTTP for local development, HTTPS for production
-        scheme = 'https' if request.is_secure or os.environ.get('FLASK_ENV') == 'production' else 'http'
+        # Use HTTP for local development, HTTPS for production/Vercel
+        is_vercel = 'vercel.app' in request.host
+        scheme = 'https' if (request.is_secure or os.environ.get('FLASK_ENV') == 'production' or is_vercel) else 'http'
         token_response = requests.post(token_endpoint, data={"client_id": os.environ.get('GOOGLE_CLIENT_ID'), "client_secret": os.environ.get('GOOGLE_CLIENT_SECRET'), "grant_type": "authorization_code", "code": code, "redirect_uri": url_for('callback', _external=True, _scheme=scheme)}).json()
+        # Check for token response errors
+        if 'error' in token_response:
+            print(f"Token error: {token_response}")
+            return f"OAuth error: {token_response.get('error_description', 'Unknown error')}", 400
+            
+        if 'access_token' not in token_response:
+            print(f"No access token in response: {token_response}")
+            return "Failed to get access token from Google", 400
+            
         userinfo_endpoint = google_provider_cfg["userinfo_endpoint"]
         userinfo_response = requests.get(userinfo_endpoint, headers={"Authorization": f"Bearer {token_response['access_token']}"}).json()
+        
         if userinfo_response.get("email_verified"):
             unique_id = userinfo_response["sub"]
             users_email = userinfo_response["email"]
-            users_name = userinfo_response["given_name"]
-            user = User.query.filter_by(google_id=unique_id).first()
-            if not user:
-                user = User(google_id=unique_id, name=users_name, email=users_email)
-                db.session.add(user)
-                db.session.commit()
-            login_user(user)
-            return redirect(url_for("index"))
+            users_name = userinfo_response.get("given_name", userinfo_response.get("name", "User"))
+            
+            try:
+                user = User.query.filter_by(google_id=unique_id).first()
+                if not user:
+                    user = User(google_id=unique_id, name=users_name, email=users_email)
+                    db.session.add(user)
+                    db.session.commit()
+                login_user(user)
+                return redirect(url_for("index"))
+            except Exception as e:
+                print(f"Database error: {e}")
+                return f"Database error: {str(e)}", 500
+                
         return "User email not available or not verified by Google.", 400
 
     @app.route("/logout")
