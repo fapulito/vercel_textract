@@ -177,6 +177,142 @@
             text-align: center;
         }
 
+        /* LLM Options Styling */
+        .llm-options {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .llm-options h3 {
+            margin: 0 0 15px 0;
+            font-size: 1.1rem;
+            color: #2c3e50;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .llm-options h3 .fa-sparkles {
+            color: #f39c12;
+        }
+
+        .checkbox-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            cursor: pointer;
+        }
+
+        .checkbox-wrapper input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .checkbox-wrapper label {
+            font-size: 1rem;
+            color: #2c3e50;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .analysis-type-wrapper {
+            margin-bottom: 15px;
+        }
+
+        .analysis-type-wrapper label {
+            display: block;
+            font-size: 0.9rem;
+            color: #7f8c8d;
+            margin-bottom: 5px;
+        }
+
+        .analysis-type-wrapper select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #bdc3c7;
+            border-radius: 8px;
+            font-size: 1rem;
+            color: #2c3e50;
+            background-color: white;
+            cursor: pointer;
+        }
+
+        .llm-quota-info {
+            background-color: #e8f4f8;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            color: #2c3e50;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .llm-quota-info .fa-circle-info {
+            color: #3498db;
+        }
+
+        .llm-quota-warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .llm-quota-warning .fa-exclamation-triangle {
+            color: #f39c12;
+        }
+
+        /* Tier Comparison Table */
+        .tier-comparison-table {
+            background-color: white;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 15px;
+            border: 1px solid #ecf0f1;
+        }
+
+        .tier-comparison-table table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .tier-comparison-table th {
+            background-color: #3498db;
+            color: white;
+            padding: 12px 10px;
+            text-align: left;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .tier-comparison-table td {
+            padding: 10px;
+            border-bottom: 1px solid #ecf0f1;
+            font-size: 0.85rem;
+            color: #2c3e50;
+        }
+
+        .tier-comparison-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .tier-comparison-table .highlight {
+            background-color: #fff9e6;
+            font-weight: 600;
+        }
+
         /* Upgrade Section */
         .upgrade-section {
             margin-bottom: 30px;
@@ -379,7 +515,7 @@
                 </p>
                 <div class="usage-stats">
                     <div class="usage-bar-container">
-                        <div class="usage-label">Monthly Usage</div>
+                        <div class="usage-label">Monthly Document Usage</div>
                         <div class="usage-bar">
                             <div class="usage-fill" id="usage-fill-bar"
                                 data-usage="{{ (current_user.documents_processed_this_month / plan_limits[current_user.tier]['documents'] * 100)|round }}">
@@ -390,49 +526,118 @@
                             plan_limits[current_user.tier]['documents'] }} documents
                         </div>
                     </div>
+                    <div class="usage-bar-container" style="margin-top: 15px;">
+                        <div class="usage-label">Monthly AI Analysis Usage</div>
+                        <div class="usage-bar">
+                            <div class="usage-fill" id="llm-usage-fill-bar"
+                                data-usage="{{ (current_user.llm_analyses_this_month / plan_limits[current_user.tier]['llm_analyses'] * 100)|round }}">
+                            </div>
+                        </div>
+                        <div class="usage-text">
+                            {{ current_user.llm_analyses_this_month }} / {{
+                            plan_limits[current_user.tier]['llm_analyses'] }} AI analyses
+                        </div>
+                    </div>
                 </div>
             </div>
 
             {% if current_user.tier == 'free' %}
             <div class="upgrade-section">
                 <div class="upgrade-card">
-                    <h3>Upgrade to Pro</h3>
-                    <div class="plan-comparison">
+                    <h3>Upgrade Your Plan</h3>
+                    <div class="plan-comparison" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">
                         <div class="plan-column current-plan">
                             <h4>Free Plan</h4>
                             <ul>
                                 <li>5 documents/month</li>
+                                <li>2 AI analyses/month</li>
                                 <li>3 pages max</li>
                                 <li>2MB file limit</li>
                             </ul>
                         </div>
                         <div class="plan-column pro-plan">
-                            <h4>Pro Plan - $10/month</h4>
+                            <h4>Pro - $10/month</h4>
                             <ul>
                                 <li>200 documents/month</li>
+                                <li>50 AI analyses/month</li>
                                 <li>50 pages max</li>
                                 <li>5MB file limit</li>
-                                <li>Priority processing</li>
+                            </ul>
+                        </div>
+                        <div class="plan-column pro-plan" style="border-color: rgba(255, 215, 0, 0.5);">
+                            <h4>Enterprise - $99/mo</h4>
+                            <ul>
+                                <li>1000 documents/month</li>
+                                <li>500 AI analyses/month</li>
+                                <li>100 pages max</li>
+                                <li>50MB file limit</li>
+                                <li>API Access</li>
                             </ul>
                         </div>
                     </div>
                     <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
-                        <a href="{{ url_for('create_checkout_session', payment_type='subscription') }}"
+                        <a href="{{ url_for('create_checkout_session', payment_type='subscription', tier='pro') }}"
                             class="upgrade-btn">
-                            <i class="fa-solid fa-crown"></i> Subscribe - $10/month
+                            <i class="fa-solid fa-crown"></i> Pro - $10/month
                         </a>
-                        <a href="{{ url_for('create_checkout_session', payment_type='onetime') }}" class="upgrade-btn"
-                            style="background-color: #27ae60;">
-                            <i class="fa-solid fa-coins"></i> Test Payment - $1
+                        <a href="{{ url_for('create_checkout_session', payment_type='subscription', tier='enterprise') }}"
+                            class="upgrade-btn" style="background-color: #667eea;">
+                            <i class="fa-solid fa-building"></i> Enterprise - $99/month
                         </a>
                     </div>
                 </div>
             </div>
-            {% else %}
+            {% elif current_user.tier == 'pro' %}
             <div class="pro-status">
                 <div class="pro-badge">
                     <i class="fa-solid fa-crown"></i>
                     <span>Pro Member - Thank you for your support!</span>
+                </div>
+            </div>
+            {% elif current_user.tier == 'enterprise' %}
+            <div class="pro-status">
+                <div class="pro-badge" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                    <i class="fa-solid fa-building"></i>
+                    <span>Enterprise Member - Premium Access</span>
+                </div>
+            </div>
+            
+            <!-- API Key Management Section -->
+            <div class="llm-options" style="margin-bottom: 20px;">
+                <h3>
+                    <i class="fa-solid fa-key"></i>
+                    API Key Management
+                </h3>
+                
+                {% if current_user.api_key %}
+                <div class="llm-quota-info" style="background-color: #d4edda; margin-bottom: 10px;">
+                    <i class="fa-solid fa-check-circle" style="color: #28a745;"></i>
+                    <span>API key active since {{ current_user.api_key_created.strftime('%Y-%m-%d') }}</span>
+                </div>
+                <button onclick="revokeApiKey()" class="submit-btn" style="background-color: #e74c3c; width: 100%;">
+                    <i class="fa-solid fa-trash"></i> Revoke API Key
+                </button>
+                {% else %}
+                <div class="llm-quota-info" style="margin-bottom: 10px;">
+                    <i class="fa-solid fa-circle-info"></i>
+                    <span>Generate an API key to access our REST API for automated document processing</span>
+                </div>
+                <button onclick="generateApiKey()" class="submit-btn" style="width: 100%;">
+                    <i class="fa-solid fa-key"></i> Generate API Key
+                </button>
+                {% endif %}
+                
+                <div id="api-key-display" style="display: none; margin-top: 15px;">
+                    <div class="llm-quota-warning" style="background-color: #fff3cd;">
+                        <i class="fa-solid fa-exclamation-triangle"></i>
+                        <div style="flex: 1;">
+                            <strong>Save this key securely - it will only be shown once!</strong>
+                            <div style="margin-top: 10px; padding: 10px; background-color: white; border-radius: 5px; font-family: monospace; word-break: break-all; font-size: 0.85rem;" id="api-key-value"></div>
+                            <button onclick="copyApiKey()" style="margin-top: 10px; padding: 8px 15px; background-color: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                                <i class="fa-solid fa-copy"></i> Copy to Clipboard
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
             {% endif %}
@@ -448,8 +653,116 @@
                     <input type="file" name="file" id="file-upload" required>
                     <label for="file-upload" class="file-input-label">Click to select a file</label>
                 </div>
+
+                <!-- LLM Analysis Options -->
+                <div class="llm-options">
+                    <h3>
+                        <i class="fa-solid fa-sparkles"></i>
+                        AI-Powered Analysis
+                    </h3>
+                    
+                    <div class="checkbox-wrapper">
+                        <input type="checkbox" id="enable-llm" name="enable_llm" value="true">
+                        <label for="enable-llm">Enable AI Analysis</label>
+                    </div>
+
+                    <div id="analysis-type-section" style="display: none;">
+                        <div class="analysis-type-wrapper">
+                            <label for="analysis-type">Analysis Type:</label>
+                            <select id="analysis-type" name="analysis_type">
+                                <option value="general">General Summary</option>
+                                <option value="invoice">Invoice/Receipt Analysis</option>
+                                <option value="contract">Contract Review</option>
+                                <option value="form">Form Data Extraction</option>
+                            </select>
+                        </div>
+
+                        <div class="llm-quota-info">
+                            <i class="fa-solid fa-circle-info"></i>
+                            <span>
+                                Remaining AI analyses: 
+                                <strong>{{ plan_limits[current_user.tier]['llm_analyses'] - current_user.llm_analyses_this_month }}</strong> 
+                                of {{ plan_limits[current_user.tier]['llm_analyses'] }} this month
+                            </span>
+                        </div>
+
+                        {% if current_user.llm_analyses_this_month >= plan_limits[current_user.tier]['llm_analyses'] %}
+                        <div class="llm-quota-warning">
+                            <i class="fa-solid fa-exclamation-triangle"></i>
+                            <span>You've reached your AI analysis limit. 
+                                {% if current_user.tier == 'free' %}
+                                <a href="{{ url_for('create_checkout_session', payment_type='subscription') }}" style="color: #f39c12; font-weight: 600;">Upgrade to Pro</a> for 50 analyses/month.
+                                {% elif current_user.tier == 'pro' %}
+                                Upgrade to Enterprise for 500 analyses/month.
+                                {% endif %}
+                            </span>
+                        </div>
+                        {% endif %}
+
+                        <!-- Tier Comparison Table -->
+                        <div class="tier-comparison-table">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Feature</th>
+                                        <th>Free</th>
+                                        <th>Pro</th>
+                                        <th>Enterprise</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr {% if current_user.tier == 'free' %}class="highlight"{% endif %}>
+                                        <td>Documents/month</td>
+                                        <td>5</td>
+                                        <td>200</td>
+                                        <td>1000</td>
+                                    </tr>
+                                    <tr {% if current_user.tier == 'free' %}class="highlight"{% endif %}>
+                                        <td>AI Analyses/month</td>
+                                        <td>2</td>
+                                        <td>50</td>
+                                        <td>500</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Max Pages</td>
+                                        <td>3</td>
+                                        <td>50</td>
+                                        <td>100</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Max File Size</td>
+                                        <td>2MB</td>
+                                        <td>5MB</td>
+                                        <td>50MB</td>
+                                    </tr>
+                                    <tr>
+                                        <td>API Access</td>
+                                        <td>❌</td>
+                                        <td>❌</td>
+                                        <td>✅</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Price</td>
+                                        <td>Free</td>
+                                        <td>$10/mo</td>
+                                        <td>$99/mo</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
                 <button type="submit" class="submit-btn">Analyze Document</button>
             </form>
+            
+            <!-- History Link -->
+            <div style="margin-top: 20px; text-align: center;">
+                <a href="/history" style="color: #3498db; text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 8px;">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                    View Document History
+                </a>
+            </div>
         </div>
 
         
@@ -470,7 +783,35 @@
                 const usagePercentage = usageBar.getAttribute('data-usage');
                 usageBar.style.width = usagePercentage + '%';
             }
+
+            const llmUsageBar = document.getElementById('llm-usage-fill-bar');
+            if (llmUsageBar) {
+                const llmUsagePercentage = llmUsageBar.getAttribute('data-usage');
+                llmUsageBar.style.width = llmUsagePercentage + '%';
+            }
         });
+
+        // Toggle analysis type section when checkbox is clicked
+        const enableLlmCheckbox = document.getElementById('enable-llm');
+        const analysisTypeSection = document.getElementById('analysis-type-section');
+        
+        enableLlmCheckbox.addEventListener('change', function () {
+            if (this.checked) {
+                analysisTypeSection.style.display = 'block';
+            } else {
+                analysisTypeSection.style.display = 'none';
+            }
+        });
+
+        // Disable checkbox if quota exceeded
+        const llmAnalysesUsed = {{ current_user.llm_analyses_this_month }};
+        const llmAnalysesLimit = {{ plan_limits[current_user.tier]['llm_analyses'] }};
+        
+        if (llmAnalysesUsed >= llmAnalysesLimit) {
+            enableLlmCheckbox.disabled = true;
+            enableLlmCheckbox.parentElement.style.opacity = '0.5';
+            enableLlmCheckbox.parentElement.style.cursor = 'not-allowed';
+        }
 
         document.getElementById('main-form').addEventListener('submit', function () {
             // Hide the form
@@ -489,6 +830,70 @@
                 fileLabel.textContent = 'Click to select a file';
             }
         });
+
+        // API Key Management Functions
+        function generateApiKey() {
+            if (!confirm('Generate a new API key? This will replace any existing key.')) {
+                return;
+            }
+            
+            fetch('/api/generate-key', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('api-key-value').textContent = data.api_key;
+                    document.getElementById('api-key-display').style.display = 'block';
+                    // Reload page after 30 seconds to show updated status
+                    setTimeout(() => {
+                        location.reload();
+                    }, 30000);
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to generate API key'));
+                }
+            })
+            .catch(error => {
+                alert('Error generating API key: ' + error);
+            });
+        }
+
+        function revokeApiKey() {
+            if (!confirm('Are you sure you want to revoke your API key? This will immediately disable all API access.')) {
+                return;
+            }
+            
+            fetch('/api/revoke-key', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('API key revoked successfully');
+                    location.reload();
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to revoke API key'));
+                }
+            })
+            .catch(error => {
+                alert('Error revoking API key: ' + error);
+            });
+        }
+
+        function copyApiKey() {
+            const apiKeyValue = document.getElementById('api-key-value').textContent;
+            navigator.clipboard.writeText(apiKeyValue).then(() => {
+                alert('API key copied to clipboard!');
+            }).catch(err => {
+                alert('Failed to copy API key: ' + err);
+            });
+        }
     </script>
 
     <div style="position: absolute; top: 20px; right: 20px;">

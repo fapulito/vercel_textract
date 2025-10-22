@@ -9,7 +9,7 @@ import datetime
 import stripe
 import logging
 from functools import wraps
-from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, send_from_directory, session
 from flask_login import LoginManager, current_user, login_required, login_user, logout_user, UserMixin
 from flask_sqlalchemy import SQLAlchemy
 from dotenv import load_dotenv
@@ -24,7 +24,7 @@ logging.getLogger('urllib3').setLevel(logging.WARNING)
 db = SQLAlchemy()
 login_manager = LoginManager()
 
-# --- 2. Define the Database Model (globally) ---
+# --- 2. Define the Database Models (globally) ---
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
@@ -34,9 +34,28 @@ class User(UserMixin, db.Model):
     tier = db.Column(db.String(20), nullable=False, default='free')
     usage_reset_date = db.Column(db.DateTime, nullable=False, default=datetime.datetime.utcnow)
     documents_processed_this_month = db.Column(db.Integer, nullable=False, default=0)
+    llm_analyses_this_month = db.Column(db.Integer, nullable=False, default=0)
+    api_key = db.Column(db.String(64), nullable=True, unique=True)
+    api_key_created = db.Column(db.DateTime, nullable=True)
 
     def get_id(self):
         return self.id
+
+class DocumentHistory(db.Model):
+    __tablename__ = 'document_history'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    filename = db.Column(db.String(255), nullable=False)
+    upload_date = db.Column(db.DateTime, nullable=False, default=datetime.datetime.utcnow)
+    analysis_type = db.Column(db.String(50), nullable=True)
+    textract_job_id = db.Column(db.String(100), nullable=False)
+    csv_filename = db.Column(db.String(255), nullable=False)
+    json_filename = db.Column(db.String(255), nullable=True)
+    file_size = db.Column(db.Integer, nullable=False)
+    page_count = db.Column(db.Integer, nullable=True)
+    processing_cost = db.Column(db.Float, nullable=True)
+    
+    user = db.relationship('User', backref='documents')
 
 # --- 3. The Application Factory Function ---
 def create_app():
@@ -62,6 +81,8 @@ def create_app():
     stripe.api_key = os.environ.get('STRIPE_SECRET_KEY')
     STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
     STRIPE_PRICE_ID = os.environ.get('STRIPE_PRICE_ID')
+    STRIPE_PRO_PRICE_ID = os.environ.get('STRIPE_SUBSCRIPTION_PRICE_ID')
+    STRIPE_ENTERPRISE_PRICE_ID = os.environ.get('STRIPE_ENTERPRISE_PRICE_ID')
     
     # Validate Stripe configuration
     stripe_enabled = bool(stripe.api_key and STRIPE_PRICE_ID)
@@ -83,8 +104,24 @@ def create_app():
     if stripe.api_key and stripe.api_key.startswith('sk_live_'):
         print("Warning: Using live Stripe keys. Make sure this is intentional for production.")
     PLAN_LIMITS = {
-        'free': {'documents': 5, 'pages': 3, 'filesize': 2 * 1024 * 1024},  # 2MB
-        'pro': {'documents': 200, 'pages': 50, 'filesize': 5 * 1024 * 1024}  # 5MB (reduced from 20MB)
+        'free': {
+            'documents': 5, 
+            'pages': 3, 
+            'filesize': 2 * 1024 * 1024,  # 2MB
+            'llm_analyses': 2
+        },
+        'pro': {
+            'documents': 200, 
+            'pages': 50, 
+            'filesize': 5 * 1024 * 1024,  # 5MB
+            'llm_analyses': 50
+        },
+        'enterprise': {
+            'documents': 1000,
+            'pages': 100,
+            'filesize': 50 * 1024 * 1024,  # 50MB
+            'llm_analyses': 500
+        }
     }
 
     # --- INITIALIZE EXTENSIONS WITH THE APP ---
@@ -93,6 +130,7 @@ def create_app():
     login_manager.login_view = 'login_page'
     
     # Create tables if they don't exist (for Vercel)
+    # This will create new tables (document_history) and add new columns to existing tables
     with app.app_context():
         try:
             db.create_all()
@@ -126,6 +164,54 @@ def create_app():
         csv_filename = f"{base_filename}_result.csv"
         s3.upload_fileobj(bytes_buffer, os.environ.get('S3_BUCKET'), csv_filename, ExtraArgs={'ContentType': 'text/csv'})
         return csv_filename
+
+    def check_llm_quota(user):
+        """Check if user has remaining LLM analysis quota"""
+        # Reset monthly counter if month has passed
+        if user.usage_reset_date < datetime.datetime.utcnow() - datetime.timedelta(days=30):
+            user.llm_analyses_this_month = 0
+            user.usage_reset_date = datetime.datetime.utcnow()
+            db.session.commit()
+        
+        # Check user tier and monthly usage
+        limit = PLAN_LIMITS.get(user.tier, {}).get('llm_analyses', 0)
+        return user.llm_analyses_this_month < limit
+
+    def upload_json_to_s3(analysis_result, original_filename):
+        """Upload LLM analysis JSON to S3"""
+        s3 = boto3.client('s3', region_name=os.environ.get('AWS_REGION'), config=Config(signature_version='s3v4', s3={'addressing_style': 'path'}))
+        
+        # Generate filename from original document name
+        base_filename = os.path.splitext(original_filename)[0]
+        json_filename = f"{base_filename}_analysis.json"
+        
+        # Convert analysis dict to JSON bytes
+        json_bytes = json.dumps(analysis_result, indent=2).encode('utf-8')
+        bytes_buffer = io.BytesIO(json_bytes)
+        
+        # Upload to S3 with proper content type
+        s3.upload_fileobj(bytes_buffer, os.environ.get('S3_BUCKET'), json_filename,
+            ExtraArgs={'ContentType': 'application/json'})
+        
+        # Return S3 key for storage
+        return json_filename
+
+    def save_to_history(user_id, filename, textract_job_id, csv_filename, json_filename, analysis_type, file_size=0, page_count=None):
+        """Save document processing record to history"""
+        # Create DocumentHistory record
+        doc = DocumentHistory(
+            user_id=user_id,
+            filename=filename,
+            textract_job_id=textract_job_id,
+            csv_filename=csv_filename,
+            json_filename=json_filename,
+            analysis_type=analysis_type,
+            file_size=file_size,
+            page_count=page_count
+        )
+        # Commit to database
+        db.session.add(doc)
+        db.session.commit()
 
     # --- DEFINE ALL ROUTES AND LOGIC WITHIN THE FACTORY ---
     @login_manager.user_loader
@@ -293,8 +379,10 @@ def create_app():
         # Check for payment success
         if request.args.get('payment') == 'success':
             payment_type = request.args.get('type')
+            tier = request.args.get('tier', 'pro')
             if payment_type == 'subscription':
-                flash("Welcome to Pro! Your upgrade is being processed and will be active shortly.", "success")
+                tier_name = tier.capitalize()
+                flash(f"Welcome to {tier_name}! Your upgrade is being processed and will be active shortly.", "success")
             elif payment_type == 'onetime':
                 flash("Test payment successful! Thank you for testing our system.", "success")
         # Clear any old flash messages on successful login
@@ -366,6 +454,15 @@ def create_app():
         file_length = file.tell()
         if file_length > filesize_limit: return f"File size exceeds the {filesize_limit // 1024 // 1024}MB limit.", 413
         file.seek(0)
+        
+        # Accept LLM analysis parameters from form
+        enable_llm = request.form.get('enable_llm') == 'true'
+        analysis_type = request.form.get('analysis_type', 'general')
+        
+        # Store LLM preferences in Flask session for later use
+        session['enable_llm'] = enable_llm
+        session['analysis_type'] = analysis_type if enable_llm else None
+        
         try:
             s3.upload_fileobj(file, os.environ.get('S3_BUCKET'), file.filename, ExtraArgs={'ContentType': file.content_type})
             response = textract.start_document_text_detection(DocumentLocation={'S3Object': {'Bucket': os.environ.get('S3_BUCKET'), 'Name': file.filename}})
@@ -400,7 +497,57 @@ def create_app():
             if response.get('JobStatus') == 'SUCCEEDED':
                 blocks = get_all_textract_blocks(job_id, response)
                 csv_filename = create_and_upload_csv(blocks, original_filename)
-                return redirect(url_for('success', csv_filename=csv_filename))
+                
+                # Check session for LLM enablement
+                json_filename = None
+                enable_llm = session.get('enable_llm', False)
+                analysis_type = session.get('analysis_type')
+                
+                # Call check_llm_quota before processing
+                if enable_llm and analysis_type:
+                    if check_llm_quota(current_user):
+                        try:
+                            # Extract text from Textract blocks
+                            text = '\n'.join([block['Text'] for block in blocks if block['BlockType'] == 'LINE'])
+                            
+                            # Invoke LLMAnalyzer if enabled and quota available
+                            from api.llm_service import LLMAnalyzer
+                            analyzer = LLMAnalyzer(os.environ.get('AWS_REGION'))
+                            analysis_result = analyzer.analyze_document(text, analysis_type)
+                            
+                            # Upload JSON results to S3
+                            json_filename = upload_json_to_s3(analysis_result, original_filename)
+                            
+                            # Increment user's LLM usage counter
+                            current_user.llm_analyses_this_month += 1
+                            db.session.commit()
+                        except Exception as llm_error:
+                            # Log error but don't fail the entire request
+                            print(f"LLM analysis error: {llm_error}")
+                            # Continue without LLM analysis
+                
+                # Get file size from S3 for history
+                s3 = boto3.client('s3', region_name=os.environ.get('AWS_REGION'))
+                try:
+                    s3_response = s3.head_object(Bucket=os.environ.get('S3_BUCKET'), Key=original_filename)
+                    file_size = s3_response.get('ContentLength', 0)
+                except:
+                    file_size = 0
+                
+                # Call save_to_history with all metadata
+                save_to_history(
+                    user_id=current_user.id,
+                    filename=original_filename,
+                    textract_job_id=job_id,
+                    csv_filename=csv_filename,
+                    json_filename=json_filename,
+                    analysis_type=analysis_type,
+                    file_size=file_size,
+                    page_count=None  # Could extract from Textract response if needed
+                )
+                
+                # Pass json_filename to success route
+                return redirect(url_for('success', csv_filename=csv_filename, json_filename=json_filename))
             else:
                 return "Job did not succeed. Status: " + response.get('JobStatus'), 500
         except Exception as e:
@@ -410,6 +557,11 @@ def create_app():
     @login_required
     def success(csv_filename):
         s3 = boto3.client('s3', region_name=os.environ.get('AWS_REGION'), config=Config(signature_version='s3v4', s3={'addressing_style': 'path'}))
+        
+        # Accept optional json_filename parameter
+        json_filename = request.args.get('json_filename')
+        
+        # Generate presigned URL for CSV file
         try:
             download_url = s3.generate_presigned_url(
                 'get_object',
@@ -419,11 +571,31 @@ def create_app():
         except Exception as e:
             print(f"Error generating presigned URL: {e}")
             download_url = None
+        
+        # Generate presigned URL for JSON file if present
+        json_url = None
+        analysis_type = None
+        if json_filename:
+            try:
+                json_url = s3.generate_presigned_url(
+                    'get_object',
+                    Params={'Bucket': os.environ.get('S3_BUCKET'), 'Key': json_filename},
+                    ExpiresIn=300
+                )
+                # Get analysis type from session
+                analysis_type = session.get('analysis_type')
+            except Exception as e:
+                print(f"Error generating JSON presigned URL: {e}")
+        
+        # Pass both URLs to template
         return render_template(
             'result.html',
             csv_filename=csv_filename,
+            json_filename=json_filename,
             bucket_name=os.environ.get('S3_BUCKET'),
-            download_url=download_url
+            download_url=download_url,
+            json_url=json_url,
+            analysis_type=analysis_type
         )
 
     @app.route('/preview/<path:csv_filename>')
@@ -476,11 +648,101 @@ def create_app():
         # If all attempts failed, return error
         return "Error: Could not load the file for preview. The file may have been moved or deleted.", 500
 
+    # --- Document History Routes ---
+    @app.route('/history')
+    @login_required
+    def history():
+        """Display user's document processing history"""
+        # Query DocumentHistory for current user
+        documents = DocumentHistory.query.filter_by(user_id=current_user.id)\
+            .order_by(DocumentHistory.upload_date.desc())\
+            .limit(50)\
+            .all()
+        
+        # Render history.html template
+        return render_template('history.html', documents=documents)
+
+    @app.route('/history/<int:doc_id>')
+    @login_required
+    def view_history_item(doc_id):
+        """View a specific document from history"""
+        # Query specific document by ID and user_id
+        doc = DocumentHistory.query.filter_by(id=doc_id, user_id=current_user.id).first_or_404()
+        
+        # Generate presigned URLs for CSV and JSON
+        s3 = boto3.client('s3', region_name=os.environ.get('AWS_REGION'), config=Config(signature_version='s3v4', s3={'addressing_style': 'path'}))
+        
+        csv_url = s3.generate_presigned_url('get_object', 
+            Params={'Bucket': os.environ.get('S3_BUCKET'), 'Key': doc.csv_filename},
+            ExpiresIn=300)
+        
+        json_url = None
+        if doc.json_filename:
+            json_url = s3.generate_presigned_url('get_object',
+                Params={'Bucket': os.environ.get('S3_BUCKET'), 'Key': doc.json_filename},
+                ExpiresIn=300)
+        
+        # Render result.html with from_history flag
+        return render_template('result.html', 
+            csv_filename=doc.csv_filename,
+            json_filename=doc.json_filename,
+            download_url=csv_url,
+            json_url=json_url,
+            analysis_type=doc.analysis_type,
+            from_history=True)
+
+    # --- API Key Management Routes ---
+    @app.route('/api/generate-key', methods=['POST'])
+    @login_required
+    def generate_api_key():
+        """Generate API key for Enterprise users"""
+        # Check if user is Enterprise tier
+        if current_user.tier != 'enterprise':
+            return jsonify({'error': 'API keys are only available for Enterprise tier users'}), 403
+        
+        # Generate cryptographically secure random key
+        import secrets
+        api_key = 'cvocr_' + secrets.token_urlsafe(48)  # 64 character key with prefix
+        
+        # Store in user.api_key field
+        current_user.api_key = api_key
+        current_user.api_key_created = datetime.datetime.utcnow()
+        db.session.commit()
+        
+        # Display key once to user
+        return jsonify({
+            'success': True,
+            'api_key': api_key,
+            'created_at': current_user.api_key_created.isoformat(),
+            'message': 'API key generated successfully. Please save this key securely - it will not be shown again.'
+        })
+    
+    @app.route('/api/revoke-key', methods=['POST'])
+    @login_required
+    def revoke_api_key():
+        """Revoke existing API key"""
+        if current_user.tier != 'enterprise':
+            return jsonify({'error': 'API keys are only available for Enterprise tier users'}), 403
+        
+        if not current_user.api_key:
+            return jsonify({'error': 'No API key to revoke'}), 400
+        
+        # Clear the API key
+        current_user.api_key = None
+        current_user.api_key_created = None
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'API key revoked successfully'
+        })
+
     # --- Stripe Payment Routes ---
     @app.route('/create-checkout-session')
     @app.route('/create-checkout-session/<payment_type>')
+    @app.route('/create-checkout-session/<payment_type>/<tier>')
     @login_required
-    def create_checkout_session(payment_type=None):
+    def create_checkout_session(payment_type=None, tier=None):
         try:
             # Use HTTP for local development, HTTPS for production
             scheme = 'https' if request.is_secure or os.environ.get('FLASK_ENV') == 'production' else 'http'
@@ -501,22 +763,35 @@ def create_app():
 
             if is_subscription:
                 # Subscription mode (recurring payments)
-                price_id = os.environ.get('STRIPE_SUBSCRIPTION_PRICE_ID', os.environ.get('STRIPE_PRICE_ID'))
+                # Determine which tier based on URL parameter
+                if tier == 'enterprise':
+                    price_id = STRIPE_ENTERPRISE_PRICE_ID
+                    plan_name = 'Enterprise'
+                    plan_price = '$99/month'
+                    tier_metadata = 'enterprise'
+                else:
+                    # Default to Pro tier
+                    price_id = STRIPE_PRO_PRICE_ID or os.environ.get('STRIPE_PRICE_ID')
+                    plan_name = 'Pro'
+                    plan_price = '$10/month'
+                    tier_metadata = 'pro'
+                
                 checkout_params = {
                     'line_items': [{'price': price_id, 'quantity': 1}],
                     'mode': 'subscription',
-                    'success_url': f"{success_url}?payment=success&type=subscription",
+                    'success_url': f"{success_url}?payment=success&type=subscription&tier={tier_metadata}",
                     'cancel_url': cancel_url,
                     'billing_address_collection': 'required',
                     'custom_text': {
                         'submit': {
-                            'message': 'Subscribe to California Vision OCR Pro Plan - $10/month'
+                            'message': f'Subscribe to California Vision OCR {plan_name} Plan - {plan_price}'
                         }
                     },
                     'metadata': {
                         'company_name': 'California Vision, Inc.',
                         'user_email': current_user.email,
-                        'payment_type': 'subscription'
+                        'payment_type': 'subscription',
+                        'tier': tier_metadata
                     }
                 }
                 
@@ -579,16 +854,36 @@ def create_app():
                     # Check payment type from metadata
                     payment_type = session.get('metadata', {}).get('payment_type', 'unknown')
                     session_mode = session.get('mode', 'unknown')
+                    tier = session.get('metadata', {}).get('tier', 'pro')
                     
                     if session_mode == 'subscription' or payment_type == 'subscription':
-                        # Only upgrade to pro for actual subscriptions
-                        user.tier = 'pro'
+                        # Upgrade to the specified tier (pro or enterprise)
+                        user.tier = tier
                         db.session.commit()
-                        print(f"User {customer_email} upgraded to Pro via subscription")
+                        print(f"User {customer_email} upgraded to {tier.capitalize()} via subscription")
                     else:
                         # For test payments, just log but don't upgrade
                         print(f"User {customer_email} completed test payment (${session.get('amount_total', 0)/100}) - no tier change")
                         # Optionally, you could create a 'test' tier or track test payments differently
+        
+        # Handle subscription cancellations
+        elif event['type'] == 'customer.subscription.deleted':
+            subscription = event['data']['object']
+            customer_id = subscription.get('customer')
+            if customer_id:
+                # Get customer email from Stripe
+                try:
+                    customer = stripe.Customer.retrieve(customer_id)
+                    customer_email = customer.get('email')
+                    if customer_email:
+                        user = User.query.filter_by(email=customer_email).first()
+                        if user:
+                            # Downgrade to free tier
+                            user.tier = 'free'
+                            db.session.commit()
+                            print(f"User {customer_email} downgraded to Free (subscription cancelled)")
+                except Exception as e:
+                    print(f"Error handling subscription cancellation: {e}")
                     
         return jsonify(success=True)
 
