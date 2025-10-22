@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document History - OCR</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f4f7f9;
+            color: #333;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+        }
+
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+            color: #2c3e50;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .subtitle {
+            font-size: 1rem;
+            color: #7f8c8d;
+            margin-bottom: 30px;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #3498db;
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.3s ease;
+        }
+
+        .back-link:hover {
+            color: #2980b9;
+        }
+
+        .back-link i {
+            margin-right: 5px;
+        }
+
+        .history-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        .history-table thead {
+            background-color: #f8f9fa;
+        }
+
+        .history-table th {
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            color: #2c3e50;
+            border-bottom: 2px solid #ecf0f1;
+        }
+
+        .history-table td {
+            padding: 15px;
+            border-bottom: 1px solid #ecf0f1;
+        }
+
+        .history-table tbody tr {
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .history-table tbody tr:hover {
+            background-color: #f8f9fa;
+        }
+
+        .filename {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .date {
+            color: #7f8c8d;
+            font-size: 0.9rem;
+        }
+
+        .analysis-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: capitalize;
+        }
+
+        .badge-general {
+            background-color: #3498db;
+            color: white;
+        }
+
+        .badge-invoice {
+            background-color: #27ae60;
+            color: white;
+        }
+
+        .badge-contract {
+            background-color: #e67e22;
+            color: white;
+        }
+
+        .badge-form {
+            background-color: #9b59b6;
+            color: white;
+        }
+
+        .badge-none {
+            background-color: #95a5a6;
+            color: white;
+        }
+
+        .download-icons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .download-icon {
+            color: #3498db;
+            font-size: 1.2rem;
+            transition: color 0.3s ease;
+        }
+
+        .download-icon:hover {
+            color: #2980b9;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #7f8c8d;
+        }
+
+        .empty-state i {
+            font-size: 4rem;
+            color: #bdc3c7;
+            margin-bottom: 20px;
+        }
+
+        .empty-state h2 {
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+            color: #7f8c8d;
+        }
+
+        .empty-state p {
+            font-size: 1rem;
+            margin-bottom: 20px;
+        }
+
+        .upload-btn {
+            display: inline-block;
+            background-color: #3498db;
+            color: white;
+            text-decoration: none;
+            padding: 12px 25px;
+            border-radius: 10px;
+            font-weight: 600;
+            transition: background-color 0.3s ease;
+        }
+
+        .upload-btn:hover {
+            background-color: #2980b9;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+
+            .history-table {
+                font-size: 0.9rem;
+            }
+
+            .history-table th,
+            .history-table td {
+                padding: 10px 5px;
+            }
+
+            h1 {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <a href="/" class="back-link">
+            <i class="fa-solid fa-arrow-left"></i> Back to Upload
+        </a>
+
+        <h1>
+            <i class="fa-solid fa-clock-rotate-left"></i>
+            Document History
+        </h1>
+        <p class="subtitle">View and access your previously processed documents</p>
+
+        {% if documents %}
+        <table class="history-table">
+            <thead>
+                <tr>
+                    <th>Filename</th>
+                    <th>Upload Date</th>
+                    <th>Analysis Type</th>
+                    <th>Downloads</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for doc in documents %}
+                <tr onclick="window.location.href='/history/{{ doc.id }}'">
+                    <td class="filename">{{ doc.filename }}</td>
+                    <td class="date">{{ doc.upload_date.strftime('%b %d, %Y at %I:%M %p') }}</td>
+                    <td>
+                        {% if doc.analysis_type %}
+                        <span class="analysis-badge badge-{{ doc.analysis_type }}">
+                            {{ doc.analysis_type }}
+                        </span>
+                        {% else %}
+                        <span class="analysis-badge badge-none">Text Only</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="download-icons">
+                            <i class="fa-solid fa-file-csv download-icon" title="CSV available"></i>
+                            {% if doc.json_filename %}
+                            <i class="fa-solid fa-file-code download-icon" title="JSON analysis available"></i>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">
+            <i class="fa-solid fa-folder-open"></i>
+            <h2>No Documents Yet</h2>
+            <p>You haven't processed any documents yet. Upload your first document to get started!</p>
+            <a href="/" class="upload-btn">
+                <i class="fa-solid fa-upload"></i> Upload Document
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+    <div style="position: absolute; top: 20px; right: 20px;">
+        <a href="/logout" style="text-decoration: none; color: #7f8c8d;">Logout</a>
+    </div>
+
+    <footer
+        style="position: fixed; bottom: 0; left: 0; right: 0; background-color: rgba(255, 255, 255, 0.9); padding: 10px; text-align: center; font-size: 0.8rem; color: #7f8c8d; border-top: 1px solid #ecf0f1;">
+        © 2025 California Vision, Inc. All Rights Reserved
+    </footer>
+</body>
+
+</html>

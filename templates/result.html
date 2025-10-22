@@ -31,6 +31,22 @@
         .mini-upgrade-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); }
         .mini-upgrade-btn .fa-crown { margin-right: 5px; color: #ffd700; }
         
+        /* Tab Interface Styles */
+        .tabs-container { margin: 30px 0; }
+        .tab-buttons { display: flex; justify-content: center; gap: 10px; margin-bottom: 20px; }
+        .tab-btn { background-color: #ecf0f1; color: #7f8c8d; border: none; padding: 12px 24px; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: all 0.3s ease; }
+        .tab-btn:hover { background-color: #d5dbdb; }
+        .tab-btn.active { background-color: #3498db; color: white; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .analysis-badge { display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 6px 12px; border-radius: 15px; font-size: 0.85rem; font-weight: 600; margin-bottom: 15px; }
+        .json-display { background-color: #fdfdfe; border: 1px solid #ecf0f1; border-radius: 8px; padding: 20px; text-align: left; max-height: 500px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; font-family: 'Courier New', Courier, monospace; font-size: 0.85rem; line-height: 1.6; color: #34495e; }
+        .json-key { color: #8e44ad; font-weight: 600; }
+        .json-string { color: #27ae60; }
+        .json-number { color: #e67e22; }
+        .json-boolean { color: #3498db; }
+        .download-buttons { display: flex; flex-direction: column; gap: 10px; align-items: center; margin-top: 20px; }
+        
         @media print {
             body > *:not(#print-preview-container) { display: none !important; }
             #print-preview-container, #preview-content { display: block !important; box-shadow: none !important; border: none !important; max-height: none !important; overflow: visible !important; width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 0 !important; }
@@ -50,6 +66,56 @@
         <h1>Processing Complete</h1>
         <p>Your document has been processed and the results are ready for download.</p>
         
+        {% if json_filename %}
+        <!-- Show analysis type badge -->
+        <div class="analysis-badge">
+            <i class="fa-solid fa-brain"></i> 
+            {% if analysis_type == 'general' %}General Analysis
+            {% elif analysis_type == 'invoice' %}Invoice Analysis
+            {% elif analysis_type == 'contract' %}Contract Analysis
+            {% elif analysis_type == 'form' %}Form Analysis
+            {% else %}AI Analysis{% endif %}
+        </div>
+        
+        <!-- Tab interface for Text and Analysis views -->
+        <div class="tabs-container">
+            <div class="tab-buttons">
+                <button class="tab-btn active" data-tab="text-tab">
+                    <i class="fa-solid fa-file-lines"></i> Text
+                </button>
+                <button class="tab-btn" data-tab="analysis-tab">
+                    <i class="fa-solid fa-brain"></i> Analysis
+                </button>
+            </div>
+            
+            <!-- Text Tab -->
+            <div id="text-tab" class="tab-content active">
+                <div id="text-preview-content" class="json-display">Loading text preview...</div>
+            </div>
+            
+            <!-- Analysis Tab -->
+            <div id="analysis-tab" class="tab-content">
+                <div id="analysis-content" class="json-display">Loading analysis...</div>
+            </div>
+        </div>
+        
+        <!-- Download buttons for both CSV and JSON -->
+        <div class="download-buttons">
+            {% if download_url %}
+                <a href="{{ download_url }}" class="download-btn" download>
+                    <i class="fa-solid fa-download"></i> Download Text (CSV)
+                </a>
+            {% endif %}
+            {% if json_url %}
+                <a href="{{ json_url }}" class="download-btn" download style="background-color: #8e44ad;">
+                    <i class="fa-solid fa-download"></i> Download Analysis (JSON)
+                </a>
+            {% endif %}
+        </div>
+        <p class="small-text">Note: These secure links will expire in 5 minutes.</p>
+        
+        {% else %}
+        <!-- Original single-file display (no LLM analysis) -->
         {% if download_url %}
             <a href="{{ download_url }}" class="download-btn" download>
                 <i class="fa-solid fa-download"></i> Download {{ csv_filename }}
@@ -57,6 +123,7 @@
             <p class="small-text">Note: This secure link will expire in 5 minutes.</p>
         {% else %}
             <p>Could not generate a download link. Please check the S3 bucket <b>{{ bucket_name }}</b> for the file <b>{{ csv_filename }}</b>.</p>
+        {% endif %}
         {% endif %}
 
         <a href="/" class="upload-another-btn">Upload Another Document</a>
@@ -87,44 +154,136 @@
             const previewContainer = document.getElementById('print-preview-container');
             const previewContent = document.getElementById('preview-content');
             
-            // --- THIS IS THE FIX ---
-            // The |safe filter tells the template engine not to escape the special
-            // characters in the URL, ensuring the JavaScript gets the correct, working link.
             const downloadUrl = "{{ download_url | safe }}";
-            // ------------------------
+            const jsonUrl = "{{ json_url | safe }}";
+            const hasAnalysis = "{{ json_filename }}" !== "";
 
             if (downloadUrl) {
                 previewContainer.style.display = 'block';
                 previewContent.style.display = 'none';
             }
 
-            printButton.addEventListener('click', function() {
-                previewContent.textContent = 'Loading preview...';
-                previewContent.style.display = 'block';
-
-                // Use backend preview route instead of direct S3 URL
+            // Tab switching functionality
+            if (hasAnalysis) {
+                const tabButtons = document.querySelectorAll('.tab-btn');
+                const tabContents = document.querySelectorAll('.tab-content');
+                
+                tabButtons.forEach(button => {
+                    button.addEventListener('click', function() {
+                        const targetTab = this.getAttribute('data-tab');
+                        
+                        // Remove active class from all buttons and contents
+                        tabButtons.forEach(btn => btn.classList.remove('active'));
+                        tabContents.forEach(content => content.classList.remove('active'));
+                        
+                        // Add active class to clicked button and corresponding content
+                        this.classList.add('active');
+                        document.getElementById(targetTab).classList.add('active');
+                    });
+                });
+                
+                // Load text preview
                 const csvFilename = "{{ csv_filename }}";
-                // Don't encode here since Flask will handle the path parameter
-                const previewUrl = `/preview/${csvFilename}`;
-                console.log("CSV filename:", csvFilename);
-                console.log("Fetching preview from:", previewUrl);
-
-                fetch(previewUrl)
+                const textPreviewUrl = `/preview/${csvFilename}`;
+                const textPreviewContent = document.getElementById('text-preview-content');
+                
+                fetch(textPreviewUrl)
                     .then(response => {
-                        if (!response.ok) {
-                            throw new Error(`Network response was not ok (status: ${response.status})`);
-                        }
+                        if (!response.ok) throw new Error('Failed to load text');
                         return response.text();
                     })
                     .then(textContent => {
-                        previewContent.textContent = textContent.trim();
-                        window.print();
+                        textPreviewContent.textContent = textContent.trim();
                     })
                     .catch(error => {
-                        console.error('Error fetching preview:', error);
-                        previewContent.textContent = 'Error: Could not load the file for preview. Please try downloading it directly.';
+                        console.error('Error loading text:', error);
+                        textPreviewContent.textContent = 'Error loading text preview. Please download the file.';
                     });
-            });
+                
+                // Load and format JSON analysis
+                if (jsonUrl) {
+                    const analysisContent = document.getElementById('analysis-content');
+                    
+                    fetch(jsonUrl)
+                        .then(response => {
+                            if (!response.ok) throw new Error('Failed to load analysis');
+                            return response.json();
+                        })
+                        .then(jsonData => {
+                            // Format JSON with syntax highlighting
+                            analysisContent.innerHTML = formatJSON(jsonData);
+                        })
+                        .catch(error => {
+                            console.error('Error loading analysis:', error);
+                            analysisContent.textContent = 'Error loading analysis. Please download the JSON file.';
+                        });
+                }
+            }
+
+            // Print button functionality (for legacy single-file view)
+            if (printButton) {
+                printButton.addEventListener('click', function() {
+                    previewContent.textContent = 'Loading preview...';
+                    previewContent.style.display = 'block';
+
+                    const csvFilename = "{{ csv_filename }}";
+                    const previewUrl = `/preview/${csvFilename}`;
+
+                    fetch(previewUrl)
+                        .then(response => {
+                            if (!response.ok) {
+                                throw new Error(`Network response was not ok (status: ${response.status})`);
+                            }
+                            return response.text();
+                        })
+                        .then(textContent => {
+                            previewContent.textContent = textContent.trim();
+                            window.print();
+                        })
+                        .catch(error => {
+                            console.error('Error fetching preview:', error);
+                            previewContent.textContent = 'Error: Could not load the file for preview. Please try downloading it directly.';
+                        });
+                });
+            }
+            
+            // Function to format JSON with basic syntax highlighting
+            function formatJSON(obj, indent = 0) {
+                const indentStr = '  '.repeat(indent);
+                let html = '';
+                
+                if (typeof obj === 'object' && obj !== null) {
+                    if (Array.isArray(obj)) {
+                        html += '[\n';
+                        obj.forEach((item, index) => {
+                            html += indentStr + '  ' + formatJSON(item, indent + 1);
+                            if (index < obj.length - 1) html += ',';
+                            html += '\n';
+                        });
+                        html += indentStr + ']';
+                    } else {
+                        html += '{\n';
+                        const keys = Object.keys(obj);
+                        keys.forEach((key, index) => {
+                            html += indentStr + '  <span class="json-key">"' + key + '"</span>: ';
+                            html += formatJSON(obj[key], indent + 1);
+                            if (index < keys.length - 1) html += ',';
+                            html += '\n';
+                        });
+                        html += indentStr + '}';
+                    }
+                } else if (typeof obj === 'string') {
+                    html += '<span class="json-string">"' + obj + '"</span>';
+                } else if (typeof obj === 'number') {
+                    html += '<span class="json-number">' + obj + '</span>';
+                } else if (typeof obj === 'boolean') {
+                    html += '<span class="json-boolean">' + obj + '</span>';
+                } else if (obj === null) {
+                    html += '<span class="json-boolean">null</span>';
+                }
+                
+                return html;
+            }
         });
     </script>
     
